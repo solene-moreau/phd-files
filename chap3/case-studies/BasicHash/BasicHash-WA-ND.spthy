@@ -1,0 +1,119 @@
+/*************************************
+BASIC HASH
+
+[1] M. Brusó, K. Chatzikokolakis, and J. d Hartog,
+‘Formal Verification of Privacy for RFID Systems’,
+in 2010 23rd IEEE Computer Security Foundations Symposium, 2010, pp. 75–88.
+
+DESCRIPTION OF THE PROTOCOL
+[init.]   kT <-- k, insert k in DB
+[session] T --> R : < nT, h(kT,nT) >
+          R --> T : OK                if there exists kR in DB
+                                         such that snd(x) = h(kR,fst(x))
+
+PROOFS
+- sanity checks
+  * readerComplete      => true (automatic mode)
+  * tagComplete         => true (automatic mode)
+- well-authentication
+  * WA_Reader           => true (automatic mode)
+- no desynchronisation
+  * ND_Reader           => true (automatic mode)
+*************************************/
+
+theory BasicHash_WA_ND
+begin
+
+functions: h/1, OK/0
+
+/*************************************
+PROTOCOL
+*************************************/
+
+rule InitReader:
+  [ Fr(~sidR) ]
+  --[ NewReaderSession(~sidR) ]->
+  [ Reader(~sidR) ]
+
+rule InitTagId:
+  [ Fr(~k) ]
+  --[ NewId(~k), InsertDB(~k) ]->
+  [ !DB(~k), !TagSession(~k) ]
+
+rule InitTagSession:
+  [ !TagSession(~kT), Fr(~sidT) ]
+  --[ NewTagSession(~sidT,~kT) ]->
+  [ Tag(~sidT,~kT) ]
+
+/* READER */
+
+rule R_in:
+  [ Reader(~sidR), In(x) ]
+  --[ InR(~sidR,x) ]->
+  [ Reader1(~sidR,x) ]
+
+rule R_test:
+  let x = <xnT,h(<kR,xnT>)> in
+  [ !DB(kR), Reader1(~sidR,x) ]
+  --[ TestR(~sidR), CompleteR(~sidR) ]->
+  [ Out(OK) ]
+
+/* TAG */
+
+rule T_out:
+  let m = <~nT,h(<kT,~nT>)> in
+  [ Tag(~sidT,kT), Fr(~nT) ]
+  --[ PlayT(~sidT,kT), OutT(~sidT,kT,~nT,m), CompleteT(~sidT) ]->
+  [ Out(m) ]
+
+/*************************************
+RESTRICTIONS
+*************************************/
+
+// No restrictions are necessary to model the sequentiality of a tag
+// because interleaving sessions are not possible for the tag
+// and the state kT is not updated.
+
+/*************************************
+SANITY CHECKS
+*************************************/
+
+lemma readerComplete:
+  exists-trace
+  "Ex sidR #i. CompleteR(sidR)@i"
+
+lemma tagComplete:
+  exists-trace
+  "Ex sidT #i. CompleteT(sidT)@i"
+
+/*************************************
+WELL-AUTHENTICATION
+*************************************/
+
+lemma WA_Reader [use_induction]:
+  "All sidR #i3.
+    TestR(sidR)@i3 ==>
+      ( Ex sidT kT nT m #i1 #i2.
+        (
+          InR(sidR,m)@i2 &
+          OutT(sidT,kT,nT,m)@i1 &
+          i1<i2 & i2<i3
+        )
+      )
+  "
+
+/*************************************
+NO DESYNCHRONISATION
+*************************************/
+
+lemma ND_Reader [use_induction]:
+  "All sidT kT nT sidR m #i1 #i2.
+    ( InR(sidR,m)@i2 &
+      OutT(sidT,kT,nT,m)@i1 &
+      i1<i2
+    ) ==> (
+      Ex kR xnT #i0. m = <xnT,h(<kR,xnT>)> & InsertDB(kR)@i0 & i0<i2
+    )
+  "
+
+end

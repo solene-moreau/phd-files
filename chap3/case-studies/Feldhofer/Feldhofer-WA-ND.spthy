@@ -1,0 +1,212 @@
+/*************************************
+FELDHOFER PROTOCOL
+[1] M. Feldhofer, S. Dominikus, and J. Wolkerstorfer,
+‘Strong Authentication for RFID Systems Using the AES Algorithm’,
+in Cryptographic Hardware and Embedded Systems - CHES 2004, vol. 3156,
+M. Joye and J.-J. Quisquater, Eds. Berlin,
+Heidelberg: Springer Berlin Heidelberg, 2004, pp. 357–370.
+
+DESCRIPTION OF THE PROTOCOL
+[init.]   kT <-- k, insert k in DB
+[session] R --> T : nR
+          T --> R : senc(<xnR,nT>,kT)
+          R --> T : senc(<xnT,nR>,kR)   if there exists kR in DB
+                                          such that fst(sdec(x,kR))=nR
+          T --> R : OK                  if x = senc(<nT,xnR>,kT)
+          T --> R : ERROR                 otherwise
+
+PROOFS
+- sanity checks
+  * readerComplete      => true (automatic mode)
+  * tagComplete         => true (automatic mode)
+- helpful lemmas
+  * sourcem2            => true (automatic mode)
+- well-authentication
+  * WA_Tag              => true (automatic mode)
+  * WA_Reader           => true (automatic mode)
+- no desynchronisation
+  * ND_Tag              => true (automatic mode)
+  * ND_Reader           => true (automatic mode)
+*************************************/
+
+theory Feldhofer_WA_ND
+begin
+
+builtins: symmetric-encryption
+functions: OK/0, ERROR/0
+
+/*************************************
+PROTOCOL
+*************************************/
+
+rule InitReader:
+  [ Fr(~sidR) ]
+  --[ NewReaderSession(~sidR) ]->
+  [ Reader(~sidR) ]
+
+rule InitTagId:
+  [ Fr(~k) ]
+  --[ NewId(~k), InsertDB(~k) ]->
+  [ !DB(~k), !TagSession(~k) ]
+
+rule InitTagSession:
+  [ !TagSession(~kT), Fr(~sidT) ]
+  --[ NewTagSession(~sidT,~kT) ]->
+  [ Tag(~sidT,~kT) ]
+
+/* READER */
+
+rule R_out1:
+  let m1 = ~nR in
+  [ Reader(~sidR), Fr(~nR) ]
+  --[ OutR1(~sidR,m1) ]->
+  [ Reader1(~sidR,m1), Out(m1) ]
+
+rule R_in1:
+  [ Reader1(~sidR,m1), In(x2) ]
+  --[ InR1(~sidR,m1,x2) ]->
+  [ Reader2(~sidR,m1,x2) ]
+
+rule R_test:
+  let x2 = senc(<m1,xnT>,kR) in
+  [ !DB(kR), Reader2(~sidR,m1,x2) ]
+  --[ TestR(~sidR), LookupDB(kR), SourceInR1(x2,xnT) ]->
+  [ Reader3(~sidR,m1,x2,xnT,kR) ]
+
+rule R_out2:
+  let m3 = senc(<xnT,m1>,kR) in
+  [ Reader3(~sidR,m1,x2,xnT,kR) ]
+  --[ OutR2(~sidR,m1,x2,m3), CompleteR(~sidR) ]->
+  [ Out(m3) ]
+
+/* TAG */
+
+rule T_in1:
+  [ Tag(~sidT,kT), In(x1) ]
+  --[ PlayT(~sidT,kT), InT1(~sidT,kT,x1) ]->
+  [ Tag1(~sidT,kT,x1) ]
+
+rule T_out1:
+  let m2 = senc(<x1,~nT>,kT) in
+  [ Tag1(~sidT,kT,x1), Fr(~nT) ]
+  --[ PlayT(~sidT,kT), OutT1(~sidT,kT,~nT,x1,m2), SourceOutT1(m2) ]->
+  [ Tag2(~sidT,kT,~nT,x1,m2), Out(m2) ]
+
+rule T_in2:
+  [ Tag2(~sidT,kT,~nT,x1,m2), In(x3) ]
+  --[ PlayT(~sidT,kT), InT2(~sidT,kT,~nT,x1,m2,x3) ]->
+  [ Tag3(~sidT,kT,~nT,x1,m2,x3) ]
+
+rule T_test_then:
+  let x3 = senc(<~nT,x1>,kT) in
+  [ Tag3(~sidT,kT,~nT,x1,m2,x3) ]
+  --[ PlayT(~sidT,kT), TestT(~sidT), CompleteT(~sidT) ]->
+  [ Out(OK) ]
+
+rule T_test_else:
+  [ Tag3(~sidT,kT,~nT,x1,m2,x3) ]
+  --[ PlayT(~sidT,kT), ElseT(~sidT), NotEqual(x3,senc(<~nT,x1>,kT)) ]->
+  [ Out(ERROR) ]
+
+/*************************************
+RESTRICTIONS
+*************************************/
+
+restriction notEqual:
+  "All x y #i. NotEqual(x,y)@i ==> not(x=y)"
+
+// no interleaving sessions for a given tag
+restriction seqSessionTag:
+  "not (Ex sidT1 sidT2 kT #i1 #i2 #i3.
+    PlayT(sidT1,kT) @ i1 &
+    PlayT(sidT2,kT) @ i2 &
+    PlayT(sidT1,kT) @ i3 &
+    i1 < i2 & i2 < i3 &
+    not(sidT1=sidT2)
+  )"
+
+/*************************************
+SANITY CHECKS
+*************************************/
+
+lemma readerComplete:
+  exists-trace
+  "Ex sidR #i. CompleteR(sidR)@i"
+
+lemma tagComplete:
+  exists-trace
+  "Ex sidT #i. CompleteT(sidT)@i"
+
+/*************************************
+HELPFUL LEMMAS
+*************************************/
+
+lemma sourcem2 [sources]:
+  "(All m2 nT #i. SourceInR1(m2,nT)@i ==>
+    (Ex #j. SourceOutT1(m2)@j  & j<i) | (Ex #j. KU(nT)@j & j<i))"
+
+/*************************************
+WELL-AUTHENTICATION
+*************************************/
+
+lemma WA_Reader [use_induction]:
+  "All sidR #i5.
+    TestR(sidR)@i5 ==>
+      ( Ex sidT kT nT m1 m2 #i1 #i2 #i3 #i4.
+        (
+          InR1(sidR,m1,m2)@i4 &
+          OutT1(sidT,kT,nT,m1,m2)@i3 &
+          InT1(sidT,kT,m1)@i2 &
+          OutR1(sidR,m1)@i1 &
+          i1<i2 & i2<i3 & i3<i4 & i4<i5
+        )
+      )
+  "
+
+lemma WA_Tag [use_induction]:
+  "All sidT #i7.
+    TestT(sidT)@i7 ==>
+      ( Ex sidR kT nT m1 m2 m3 #i1 #i2 #i3 #i4 #i5 #i6.
+        (
+          InT2(sidT,kT,nT,m1,m2,m3)@i6 &
+          OutR2(sidR,m1,m2,m3)@i5 &
+          InR1(sidR,m1,m2)@i4 &
+          OutT1(sidT,kT,nT,m1,m2)@i3 &
+          InT1(sidT,kT,m1)@i2 &
+          OutR1(sidR,m1)@i1 &
+          i1<i2 & i2<i3 & i3<i4 & i4<i5 & i4<i5 & i5<i6 & i6<i7
+        )
+      )
+  "
+
+/*************************************
+NO DESYNCHRONISATION
+*************************************/
+
+lemma ND_Reader [use_induction]:
+  "All sidR sidT kT nT m1 m2 #i1 #i2 #i3 #i4.
+    ( InR1(sidR,m1,m2)@i4 &
+      OutT1(sidT,kT,nT,m1,m2)@i3 &
+      InT1(sidT,kT,m1)@i2 &
+      OutR1(sidR,m1)@i1 &
+      i1<i2 & i2<i3 & i3<i4
+    ) ==> (
+      Ex kR xnT #i0. m2 = senc(<m1,xnT>,kR) & InsertDB(kR)@i0 & i0<i4
+    )
+  "
+
+lemma ND_Tag [use_induction]:
+  "All sidR sidT kT nT m1 m2 m3 #i1 #i2 #i3 #i4 #i5 #i6.
+    ( InT2(sidT,kT,nT,m1,m2,m3)@i6 &
+      OutR2(sidR,m1,m2,m3)@i5 &
+      InR1(sidR,m1,m2)@i4 &
+      OutT1(sidT,kT,nT,m1,m2)@i3 &
+      InT1(sidT,kT,m1)@i2 &
+      OutR1(sidR,m1)@i1 &
+      i1<i2 & i2<i3 & i3<i4 & i4<i5 & i4<i5 & i5<i6
+    ) ==> (
+      m3 = senc(<nT,m1>,kT)
+    )
+  "
+
+end

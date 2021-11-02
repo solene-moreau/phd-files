@@ -1,0 +1,136 @@
+theory BasicHash_diff_v2 begin
+
+// Function signature and definition of the equational theory E
+
+functions: OK/0, fst/1, h/1, pair/2, snd/1
+equations: fst(<x.1, x.2>) = x.1, snd(<x.1, x.2>) = x.2
+
+
+
+rule (modulo E) InitReader:
+   [ Fr( ~sidR ) ]
+  --[ NewReaderSession( ~sidR ) ]->
+   [ Reader( ~sidR ) ]
+
+rule (modulo E) InitTagIdLeft:
+   [ Fr( ~k ) ] --> [ !TagIdLeft( ~k ) ]
+
+rule (modulo E) InitTagIdLeftRight:
+   [ !TagIdLeft( ~k ), Fr( ~kk ) ]
+  --[ InsertDB( diff(~k, ~kk) ) ]->
+   [ !DB( diff(~k, ~kk) ), TagIdLeftRight( ~k, ~kk ) ]
+
+rule (modulo E) InitTagSession:
+   [ TagIdLeftRight( ~k, ~kk ), Fr( ~sidT ) ]
+  --[ NewTagSession( ~sidT, diff(~k, ~kk) ) ]->
+   [ Tag( ~sidT, diff(~k, ~kk) ) ]
+
+rule (modulo E) R_in:
+   [ Reader( ~sidR ), In( x ) ]
+  --[ InR( ~sidR, x ) ]->
+   [ Reader1( ~sidR, x ) ]
+
+rule (modulo E) R_test:
+   [ !DB( kR ), Reader1( ~sidR, <xnT, h(<kR, xnT>)> ) ]
+  --[ TestR( ~sidR ), CompleteR( ~sidR ) ]->
+   [ Out( OK ) ]
+
+rule (modulo E) T_out:
+   [ Tag( ~sidT, kT ), Fr( ~nT ) ]
+  --[
+  PlayT( ~sidT, kT ), OutT( ~sidT, kT, ~nT, <~nT, h(<kT, ~nT>)> ),
+  CompleteT( ~sidT )
+  ]->
+   [ Out( <~nT, h(<kT, ~nT>)> ) ]
+
+lemma readerComplete [right]:
+  exists-trace "∃ sidR #i. CompleteR( sidR ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidR #i. (CompleteR( sidR ) @ #i)"
+*/
+simplify
+solve( !DB( kR ) ▶₀ #i )
+  case InitTagIdLeftRight
+  solve( Reader1( ~sidR, <xnT, h(<~kk, xnT>)> ) ▶₁ #i )
+    case R_in
+    solve( !KU( h(<~kk, xnT>) ) @ #vk.2 )
+      case T_out
+      solve( !KU( ~nT ) @ #vk.2 )
+        case T_out
+        SOLVED // trace found
+      qed
+    qed
+  qed
+qed
+
+lemma readerComplete [left]:
+  exists-trace "∃ sidR #i. CompleteR( sidR ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidR #i. (CompleteR( sidR ) @ #i)"
+*/
+simplify
+solve( !DB( kR ) ▶₀ #i )
+  case InitTagIdLeftRight
+  solve( Reader1( ~sidR, <xnT, h(<~k, xnT>)> ) ▶₁ #i )
+    case R_in
+    solve( !KU( h(<~k, xnT>) ) @ #vk.2 )
+      case T_out
+      solve( !KU( ~nT ) @ #vk.2 )
+        case T_out
+        SOLVED // trace found
+      qed
+    qed
+  qed
+qed
+
+lemma tagComplete [right]:
+  exists-trace "∃ sidT #i. CompleteT( sidT ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidT #i. (CompleteT( sidT ) @ #i)"
+*/
+simplify
+solve( Tag( ~sidT, kT ) ▶₀ #i )
+  case InitTagSession
+  SOLVED // trace found
+qed
+
+lemma tagComplete [left]:
+  exists-trace "∃ sidT #i. CompleteT( sidT ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidT #i. (CompleteT( sidT ) @ #i)"
+*/
+simplify
+solve( Tag( ~sidT, kT ) ▶₀ #i )
+  case InitTagSession
+  SOLVED // trace found
+qed
+
+/* All well-formedness checks were successful. */
+
+diffLemma Observational_equivalence:
+rule-equivalence
+  case Rule_R_test
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( !DB( kR ) ▶₀ #i ) )
+      case InitTagIdLeftRight
+      step( solve( Reader1( ~sidR, <xnT, h(<~k, xnT>)> ) ▶₁ #i ) )
+        case R_in
+        step( solve( !KU( h(<~k, xnT>) ) @ #vk.2 ) )
+          case T_out
+          step( solve( !KU( ~nT ) @ #vk.2 ) )
+            case T_out
+            by ATTACK // trace found
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+end

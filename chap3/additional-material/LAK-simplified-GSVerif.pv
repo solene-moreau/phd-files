@@ -1,0 +1,97 @@
+(* -----------------------------------------------------------------------------
+LAK (WITH PAIRS, AND OTHER SIMPLIFICATIONS)
+
+[1] T. van Deursen and S. Radomirović,
+‘Attacks on RFID Protocols’,
+Cryptology ePrint Archive, vol. 2008, no. 310, pp. 1–56, Aug. 2009.
+
+DESCRIPTION OF THE PROTOCOL
+[init.]   kT <-- k, kR <-- k
+[session] R --> T : nR
+          T --> R : <nT,h(<xnR,nT,kT>)>
+          R --> T : h(<h(<nR,xnT,xkT>),xkT,nR>)   if x = <xnT,h(<nR,xnT,kR>)>
+                                                  kR <-- h(kR)
+          R --> T : ERROR                         otherwise
+          T --> R : OK                            if x = h(<h(<xnR,nT,kT>),kT,xnR>)
+                                                  kT <-- h(kT)
+          T --> R : ERROR                         otherwise
+
+COMMENTS
+- states are encoded through the use of private channels, with the annotation
+  [precise] used by GSVerif
+- simplifications
+  * 3 hash functions (hone, htwo, hkey [private])
+  * no resynchronisation procedure
+  * abort not modelled
+  * sequentiality both for tags and readers
+
+RESULT (for a query encoding a simple form of authentication)
+Non-termination with ProVerif after pre-processing the file with GSVerif.
+----------------------------------------------------------------------------- *)
+
+(* public communication channels *)
+free cR : channel.
+free cT : channel.
+free OK: bitstring.
+free ERROR:bitstring.
+
+free cprivR: channel [private].
+free cprivT: channel [private].
+
+(* constructors *)
+
+fun hone(bitstring): bitstring.
+fun htwo(bitstring): bitstring.
+fun hkey(bitstring): bitstring [private].
+
+(* ==EVENTS== *)
+event Ttest(bitstring,bitstring,bitstring,bitstring,bitstring).
+event Rout(bitstring,bitstring,bitstring,bitstring,bitstring).
+
+(* ==QUERIES== *)
+query kT:bitstring, nT:bitstring, nR:bitstring, m1:bitstring, m2:bitstring, m3:bitstring; event(Ttest(kT,nT,m1,m2,m3)) ==> event(Rout(kT,nR,m1,m2,m3)).
+
+(* ==PROTOCOL== *)
+
+(* Reader role *)
+let Reader(cprivR:channel) =
+  new nR: bitstring;
+  in(cprivR,kR:bitstring);
+
+  let m1 = nR in
+  out(cR,m1);
+
+  in(cR,x2:bitstring);
+  let (xnT:bitstring,xhash:bitstring) = x2 in
+  if xhash = hone((nR,xnT,kR))  then
+    let m3 = htwo((xhash,kR,m1)) in
+      ( event Rout(kR,nR,m1,x2,m3);
+        out(cR,m3);
+        out(cprivR,hkey(kR))
+      )
+  else out(cR,ERROR).
+
+
+(* Tag role *)
+let Tag(cprivT:channel) =
+  new nT:bitstring;
+  in(cprivT,kT:bitstring);
+
+  in(cT,x1:bitstring);
+  let m2 = (nT, hone((x1,nT,kT))) in
+  out(cT, m2);
+
+  in(cT,x3:bitstring);
+  if htwo((hone((x1, nT, kT)),kT,x1)) = x3 then
+    ( event Ttest(kT,nT,x1,m2,x3);
+      out(cT,OK);
+      out(cprivT,hkey(kT))
+    )
+  else out(cT,ERROR).
+
+(* multi sessions model *)
+process
+  ! new k:bitstring;
+    new cprivR: channel [precise];
+    new cprivT: channel [precise];
+    (out(cprivT, k) | out(cprivR, k) | ! Reader(cprivR) | ! Tag(cprivT))

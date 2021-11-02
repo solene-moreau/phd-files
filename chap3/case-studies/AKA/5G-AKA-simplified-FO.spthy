@@ -1,0 +1,196 @@
+/*************************************
+AKA (simplified v1)
+
+DESCRIPTION OF THE PROTOCOL
+[init.]   kMS <-- kIMSI,IMSI, insert kIMSI,IMSI in DB
+          skN = network private key, pkN = associated public key
+[session] N  --> MS : n1
+          MS --> N  : aenc(<kIMSI,xn1,n2>,pkN)
+          N  --> MS : <RAND, f5(kIMSI,<RAND,xn2>)>  if there exists kIMSI in DB
+                                                      such that fst(adec(x,skN)) = <kIMSI,n1>
+          MS --> N  : f2(kIMSI,xRAND)               if x = h(<h(<xnR,nT,kT>),kT,xnR>)
+          MS --> N  : error                         otherwise
+          N  --> MS : ok                            if x=f2(kIMSI,RAND)
+          N  --> MS : error                         otherwise
+
+PROOFS
+- sanity checks
+  * readerComplete            => true (automatic mode)
+  * tagComplete               => true (automatic mode)
+- helpful lemmas
+  * initMobileStationId       => true (automatic mode)
+  * initDB                    => true (automatic mode)
+  * secrecyKeyDB              => true (automatic mode)
+  * secrecyKeyTag             => true (automatic mode)
+- frame opacity
+  * Observational_equivalence => true (automatic mode)
+*************************************/
+
+theory AKA_simplified_FO
+begin
+
+builtins: asymmetric-encryption
+functions: f1/2, f2/2, OK/0, ERROR/0, extractN/4 [private], extractMS/3 [private]
+equations:
+  extractN(aenc(<kIMSI,n1,n2>,pk(skN)),kIMSI,n1,skN) = n2,
+  extractMS(<RAND,f1(kIMSI,<RAND,n2>)>,kIMSI,n2) = RAND
+
+/*************************************
+PROTOCOL
+*************************************/
+
+// skN = network private key
+rule InitNetwork:
+  [ Fr(~skN) ]
+  --[ Once('initNetwork'), NewNetworkPrivateKey(~skN) ]->
+  [ !NewNetwork(~skN), !Pk(pk(~skN)), Out(pk(~skN)) ]
+
+rule InitNetworkSession:
+  [ Fr(~sidN), !NewNetwork(~skN) ]
+  --[ NewNetworkSession(~sidN) ]->
+  [ Network(~sidN,~skN) ]
+
+// IMSI = identity of the mobile station with associated long-term key kIMSI
+rule InitMobileStationId:
+  [ Fr(~kIMSI), Fr(~IMSI) ]
+  --[ InsertDB(~kIMSI,~IMSI) ]->
+  [ !DB(~kIMSI,~IMSI), !MobileStationState(~kIMSI,~IMSI), Out(~IMSI) ]
+
+rule InitMobileStationSession:
+  [ !MobileStationState(~kIMSI,~IMSI), Fr(~sidMS) ]
+  --[ NewMobileStationSession(~sidMS,~kIMSI,~IMSI) ]->
+  [ MobileStation(~sidMS,~kIMSI,~IMSI) ]
+
+/* NETWORK */
+
+rule N_out_1:
+  [ Network(~sidN,~skN), Fr(~n1) ]
+  --[ OutN1(~sidN,~skN,~n1) ]->
+  [ Network1(~sidN,~skN,~n1), Out(~n1) ]
+
+rule N_in_1:
+  [ Network1(~sidN,~skN,~n1), In(xID) ]
+  --[ InN1(~sidN,~skN,~n1,xID) ]->
+  [ Network2(~sidN,~skN,~n1,xID) ]
+
+rule N_test_1:
+  // let xID = aenc(<~kIMSI,~n1,xn2>,pk(~skN)) in
+  let xn2 = extractN(xID,~kIMSI,~n1,~skN) in
+  [ !DB(~kIMSI,~IMSI), Network2(~sidN,~skN,~n1,xID) ]
+  --[ LookupDB(~kIMSI,~IMSI), TestN1(~sidN,~skN) ]->
+  [ Network3(~sidN,~skN,~n1,xID,xn2,~kIMSI,~IMSI) ]
+
+rule N_out_2:
+  let mReq = diff(<~RAND,f1(~kIMSI,<~RAND,xn2>)>,<~nIdealRAND,~nIdealf1>) in
+  [ Network3(~sidN,~skN,~n1,xID,xn2,~kIMSI,~IMSI), Fr(~RAND), Fr(~nIdealRAND), Fr(~nIdealf1) ]
+  --[ OutN2(~sidN,~skN,~n1,xID,mReq) ]->
+  [ Network4(~sidN,~skN,~n1,xID,xn2,~kIMSI,~IMSI,~RAND,mReq), Out(mReq) ]
+
+rule N_in_2:
+  [ Network4(~sidN,~skN,~n1,xID,xn2,~kIMSI,~IMSI,~RAND,mReq), In(xRes) ]
+  --[ InN2(~sidN,~skN,~n1,xID,mReq,xRes) ]->
+  [ Network5(~sidN,~skN,~n1,xID,xn2,~kIMSI,~IMSI,~RAND,mReq,xRes) ]
+
+rule N_test_2_Then:
+  // let xRes = f2(~kIMSI,~RAND) in
+  [ Network5(~sidN,~skN,~n1,xID,xn2,~kIMSI,~IMSI,~RAND,mReq,xRes) ]
+  --[ TestN2_Then(~sidN,~skN), CompleteN(~sidN) ]->
+  [ Out(OK) ]
+
+rule N_test_Else:
+  [ Network5(~sidN,~skN,~n1,xID,xn2,~kIMSI,~IMSI,~RAND,mReq,xRes) ]
+  --[ TestN2_Else(~sidN,~skN) ]-> // NotEqual(xRes,f2(~kIMSI,~RAND))
+  [ Out(ERROR)]
+
+/* MOBILE STATION */
+
+rule MS_in_1:
+  [ MobileStation(~sidMS,~kIMSI,~IMSI), In(xn1) ]
+  --[ PlayMS(~sidMS,~kIMSI), InMS1(~sidMS,~kIMSI,~IMSI,xn1) ]->
+  [ MobileStation1(~sidMS,~kIMSI,~IMSI,xn1) ]
+
+rule MS_out_1:
+  let mID = diff(aenc(<~kIMSI,xn1,~n2>,pkN),~nIdealaenc) in
+  [ !Pk(pkN), MobileStation1(~sidMS,~kIMSI,~IMSI,xn1), Fr(~n2), Fr(~nIdealaenc) ]
+  --[ PlayMS(~sidMS,~kIMSI), OutMS1(~sidMS,~kIMSI,~IMSI,~n2,xn1,mID) ]->
+  [ MobileStation2(~sidMS,~kIMSI,~IMSI,xn1,mID,~n2), Out(mID) ]
+
+rule MS_in_2:
+  [ MobileStation2(~sidMS,~kIMSI,~IMSI,xn1,mID,~n2), In(xReq) ]
+  --[ PlayMS(~sidMS,~kIMSI), InMS2(~sidMS,~kIMSI,~IMSI,xn1,mID,xReq) ]->
+  [ MobileStation3(~sidMS,~kIMSI,~IMSI,xn1,mID,~n2,xReq) ]
+
+rule MS_test_Then:
+  // let xReq = <xRAND,f1(~kIMSI,<xRAND,~n2>)> in
+  let xRAND = extractMS(xReq,~kIMSI,~n2) in
+  [ MobileStation3(~sidMS,~kIMSI,~IMSI,xn1,mID,~n2,xReq) ]
+  --[ PlayMS(~sidMS,~kIMSI), TestMS_Then(~sidMS) ]->
+  [ MobileStation4(~sidMS,~kIMSI,~IMSI,xn1,mID,~n2,xReq,xRAND) ]
+
+rule MS_test_Else:
+  [ MobileStation3(~sidMS,~kIMSI,~IMSI,xn1,mID,~n2,xReq) ]
+  --[ PlayMS(~sidMS,~kIMSI), TestMS_Else(~sidMS) ]-> // IncorrectReqMsg(xReq,~kIMSI,~n2)
+  [ Out(ERROR) ]
+
+rule MS_out_2:
+  let mRes = diff(f2(~kIMSI,xRAND),~nIdealf2) in
+  [ MobileStation4(~sidMS,~kIMSI,~IMSI,xn1,mID,~n2,xReq,xRAND), Fr(~nIdealf2) ]
+  --[ PlayMS(~sidMS,~kIMSI), OutMS2(~sidMS,~kIMSI,~IMSI,xn1,mID,xReq,mRes), CompleteMS(~sidMS) ]->
+  [ Out(mRes) ]
+
+/*************************************
+RESTRICTIONS
+*************************************/
+
+restriction once:
+  "All x #i #j. Once(x)@i & Once(x)@j ==> #i = #j"
+
+// restriction notEqual:
+//   "All x y #i. NotEqual(x,y)@i ==> not(x=y)"
+
+// restriction incorrectResyncMsg:
+//   "All xReq kIMSI n2 #i. IncorrectReqMsg(xReq,kIMSI,n2)@i
+//     ==> not(Ex xRAND. xReq = <xRAND,f1(kIMSI,<xRAND,n2>)>)"
+
+// // no interleaving sessions for a given mobile station
+// restriction seqSessionMobileStation:
+//   "not (Ex sidMS1 sidMS2 kIMSI #i1 #i2 #i3.
+//     PlayMS(sidMS1,kIMSI)@i1 &
+//     PlayMS(sidMS2,kIMSI)@i2 &
+//     PlayMS(sidMS1,kIMSI)@i3 &
+//     i1<i2 & i2<i3 &
+//     not(sidMS1=sidMS2)
+//   )"
+
+/*************************************
+SANITY CHECKS
+*************************************/
+
+lemma mobileStationComplete:
+  exists-trace
+    "Ex sidMS #i. CompleteMS(sidMS)@i"
+
+lemma networkComplete:
+  exists-trace
+    "Ex sidN #i. CompleteN(sidN)@i"
+
+/*************************************
+HELPFUL LEMMAS
+*************************************/
+
+lemma initMobileStationId [use_induction, reuse]:
+  "All sidMS kIMSI #i.
+    PlayMS(sidMS,kIMSI)@i ==> Ex IMSI #j. InsertDB(kIMSI,IMSI)@j & j<i"
+
+lemma initDB [use_induction, reuse]:
+  "All kIMSI IMSI #i.
+    LookupDB(kIMSI,IMSI)@i ==> Ex #j. InsertDB(kIMSI,IMSI)@j & j<i"
+
+lemma secrecyKeyDB [use_induction, reuse] :
+  "All kIMSI IMSI #i. LookupDB(kIMSI,IMSI)@i ==> not(Ex #j. KU(kIMSI)@j)"
+
+lemma secrecyKeyTag [use_induction, reuse] :
+  "All sidMS kIMSI #i. PlayMS(sidMS,kIMSI)@i ==> not(Ex #j. KU(kIMSI)@j)"
+
+
+end

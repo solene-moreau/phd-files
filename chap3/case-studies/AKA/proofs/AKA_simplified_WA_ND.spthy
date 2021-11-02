@@ -1,0 +1,2356 @@
+theory AKA_simplified_WA_ND begin
+
+// Function signature and definition of the equational theory E
+
+functions: ERROR/0, OK/0, adec/2, aenc/2, f1/2, f2/2, fst/1,
+           pair/2, pk/1, snd/1
+equations:
+    adec(aenc(x.1, pk(x.2)), x.2) = x.1,
+    fst(<x.1, x.2>) = x.1,
+    snd(<x.1, x.2>) = x.2
+
+
+
+rule (modulo E) InitNetwork:
+   [ Fr( ~skN ) ]
+  --[ Once( 'initNetwork' ), NewNetworkPrivateKey( ~skN ) ]->
+   [ !NewNetwork( ~skN ), !Pk( pk(~skN) ), Out( pk(~skN) ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) InitNetworkSession:
+   [ Fr( ~sidN ), !NewNetwork( ~skN ) ]
+  --[ NewNetworkSession( ~sidN ) ]->
+   [ Network( ~sidN, ~skN ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) InitMobileStationId:
+   [ Fr( ~kIMSI ), Fr( ~IMSI ) ]
+  --[ InsertDB( ~kIMSI, ~IMSI ) ]->
+   [
+   !DB( ~kIMSI, ~IMSI ), !MobileStationState( ~kIMSI, ~IMSI ),
+   Out( ~IMSI )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) InitMobileStationSession:
+   [ !MobileStationState( ~kIMSI, ~IMSI ), Fr( ~sidMS ) ]
+  --[ NewMobileStationSession( ~sidMS, ~kIMSI, ~IMSI ) ]->
+   [ MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) N_out_1:
+   [ Network( ~sidN, ~skN ), Fr( ~n1 ) ]
+  --[ OutN1( ~sidN, ~skN, ~n1 ) ]->
+   [ Network1( ~sidN, ~skN, ~n1 ), Out( ~n1 ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) N_in_1:
+   [ Network1( ~sidN, ~skN, ~n1 ), In( xID ) ]
+  --[ InN1( ~sidN, ~skN, ~n1, xID ) ]->
+   [ Network2( ~sidN, ~skN, ~n1, xID ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) N_test_1:
+   [
+   !DB( ~kIMSI, ~IMSI ),
+   Network2( ~sidN, ~skN, ~n1, aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) )
+   ]
+  --[ LookupDB( ~kIMSI, ~IMSI ), TestN1( ~sidN, ~skN ) ]->
+   [
+   Network3( ~sidN, ~skN, ~n1, aenc(<~kIMSI, ~n1, xn2>, pk(~skN)),
+             xn2, ~kIMSI, ~IMSI
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) N_out_2:
+   [
+   Network3( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI ), Fr( ~RAND )
+   ]
+  --[
+  OutN2( ~sidN, ~skN, ~n1, xID, <~RAND, f1(~kIMSI, <~RAND, xn2>)> )
+  ]->
+   [
+   Network4( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI, ~RAND,
+             <~RAND, f1(~kIMSI, <~RAND, xn2>)>
+   ),
+   Out( <~RAND, f1(~kIMSI, <~RAND, xn2>)> )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) N_in_2:
+   [
+   Network4( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI, ~RAND, mReq ),
+   In( xRes )
+   ]
+  --[ InN2( ~sidN, ~skN, ~kIMSI, ~RAND, ~n1, xID, mReq, xRes ) ]->
+   [
+   Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI, ~RAND, mReq,
+             xRes
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) N_test_2_Then:
+   [
+   Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI, ~RAND, mReq,
+             f2(~kIMSI, ~RAND)
+   )
+   ]
+  --[ TestN2_Then( ~sidN, ~skN ), CompleteN( ~sidN ) ]->
+   [ Out( OK ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) N_test_Else:
+   [
+   Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI, ~RAND, mReq,
+             xRes
+   )
+   ]
+  --[ TestN2_Else( ~sidN, ~skN ), NotEqual( xRes, f2(~kIMSI, ~RAND) )
+  ]->
+   [ Out( ERROR ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) MS_in_1:
+   [ MobileStation( ~sidMS, ~kIMSI, ~IMSI ), In( xn1 ) ]
+  --[ PlayMS( ~sidMS, ~kIMSI ), InMS1( ~sidMS, ~kIMSI, ~IMSI, xn1 )
+  ]->
+   [ MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1 ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) MS_out_1:
+   [
+   !Pk( pkN ), MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1 ), Fr( ~n2 )
+   ]
+  --[
+  PlayMS( ~sidMS, ~kIMSI ),
+  OutMS1( ~sidMS, ~kIMSI, ~IMSI, ~n2, xn1,
+          aenc(<~kIMSI, xn1, ~n2>, pkN)
+  )
+  ]->
+   [
+   MobileStation2( ~sidMS, ~kIMSI, ~IMSI, xn1,
+                   aenc(<~kIMSI, xn1, ~n2>, pkN), ~n2
+   ),
+   Out( aenc(<~kIMSI, xn1, ~n2>, pkN) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) MS_in_2:
+   [
+   MobileStation2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2 ), In( xReq )
+   ]
+  --[
+  PlayMS( ~sidMS, ~kIMSI ),
+  InMS2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, xReq )
+  ]->
+   [ MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) MS_test_Then:
+   [
+   MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                   <xRAND, f1(~kIMSI, <xRAND, ~n2>)>
+   )
+   ]
+  --[ PlayMS( ~sidMS, ~kIMSI ), TestMS_Then( ~sidMS ) ]->
+   [
+   MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                   <xRAND, f1(~kIMSI, <xRAND, ~n2>)>, xRAND
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) MS_test_Else:
+   [ MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq ) ]
+  --[
+  PlayMS( ~sidMS, ~kIMSI ), TestMS_Else( ~sidMS ),
+  IncorrectReqMsg( xReq, ~kIMSI, ~n2 )
+  ]->
+   [ Out( ERROR ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) MS_out_2:
+   [
+   MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq, xRAND )
+   ]
+  --[
+  PlayMS( ~sidMS, ~kIMSI ),
+  OutMS2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, xReq, f2(~kIMSI, xRAND) ),
+  CompleteMS( ~sidMS )
+  ]->
+   [ Out( f2(~kIMSI, xRAND) ) ]
+
+  /* has exactly the trivial AC variant */
+
+restriction once:
+  "∀ x #i #j. ((Once( x ) @ #i) ∧ (Once( x ) @ #j)) ⇒ (#i = #j)"
+  // safety formula
+
+restriction notEqual:
+  "∀ x y #i. (NotEqual( x, y ) @ #i) ⇒ (¬(x = y))"
+  // safety formula
+
+restriction incorrectResyncMsg:
+  "∀ xReq kIMSI n2 #i.
+    (IncorrectReqMsg( xReq, kIMSI, n2 ) @ #i) ⇒
+    (¬(∃ xRAND. xReq = <xRAND, f1(kIMSI, <xRAND, n2>)>))"
+  // safety formula
+
+restriction seqSessionMobileStation:
+  "¬(∃ sidMS1 sidMS2 kIMSI #i1 #i2 #i3.
+      (((((PlayMS( sidMS1, kIMSI ) @ #i1) ∧
+          (PlayMS( sidMS2, kIMSI ) @ #i2)) ∧
+         (PlayMS( sidMS1, kIMSI ) @ #i3)) ∧
+        (#i1 < #i2)) ∧
+       (#i2 < #i3)) ∧
+      (¬(sidMS1 = sidMS2)))"
+  // safety formula
+
+lemma mobileStationComplete:
+  exists-trace "∃ sidMS #i. CompleteMS( sidMS ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidMS #i. (CompleteMS( sidMS ) @ #i)"
+*/
+simplify
+solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq,
+                       xRAND
+       ) ▶₀ #i )
+  case MS_test_Then
+  solve( !KU( f1(~kIMSI, <xRAND, ~n2>) ) @ #vk.2 )
+    case N_out_2
+    solve( !KU( aenc(<~kIMSI, ~n1, ~n2>, pk(~skN)) ) @ #vk.4 )
+      case MS_out_1
+      solve( !KU( ~RAND ) @ #vk.3 )
+        case N_out_2
+        solve( !KU( ~n1 ) @ #vk.4 )
+          case N_out_1
+          SOLVED // trace found
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma networkComplete:
+  exists-trace "∃ sidN #i. CompleteN( sidN ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidN #i. (CompleteN( sidN ) @ #i)"
+*/
+simplify
+solve( Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI, ~RAND,
+                 mReq, f2(~kIMSI, ~RAND)
+       ) ▶₀ #i )
+  case N_in_2
+  solve( !KU( f2(~kIMSI, ~RAND) ) @ #vk )
+    case MS_out_2
+    solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.1 )
+      case MS_out_1
+      solve( (¬(#vr.8 < #vr.14))  ∥ (¬(#vr.14 < #vr.8))  ∥
+             (~sidMS = ~sidMS.1) )
+        case case_1
+        solve( (¬(#vr.9 < #vr.14))  ∥ (¬(#vr.14 < #vr.9))  ∥
+               (~sidMS = ~sidMS.1) )
+          case case_1
+          solve( (¬(#vr.10 < #vr.14))  ∥ (¬(#vr.14 < #vr.10))  ∥
+                 (~sidMS = ~sidMS.1) )
+            case case_1
+            solve( (¬(#vr.11 < #vr.14))  ∥ (¬(#vr.14 < #vr.11))  ∥
+                   (~sidMS = ~sidMS.1) )
+              case case_1
+              solve( (¬(#vr.11 < #vr.14))  ∥ (¬(#vr.14 < #vr.12))  ∥
+                     (~sidMS = ~sidMS.1) )
+                case case_1
+                solve( (¬(#vr.11 < #vr.15))  ∥ (¬(#vr.15 < #vr.11))  ∥
+                       (~sidMS = ~sidMS.1) )
+                  case case_1
+                  solve( (¬(#vr.12 < #vr.14))  ∥ (¬(#vr.14 < #vr.11))  ∥
+                         (~sidMS = ~sidMS.1) )
+                    case case_2
+                    solve( (¬(#vr.12 < #vr.14))  ∥ (¬(#vr.14 < #vr.12))  ∥
+                           (~sidMS = ~sidMS.1) )
+                      case case_2
+                      solve( !KU( ~RAND ) @ #vk.3 )
+                        case N_out_2
+                        solve( !KU( ~n1 ) @ #vk.5 )
+                          case N_out_1
+                          solve( !KU( f1(~kIMSI, <~RAND, ~n2>) ) @ #vk.5 )
+                            case N_out_2
+                            SOLVED // trace found
+                          qed
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma initMobileStationId [use_induction, reuse]:
+  all-traces
+  "∀ sidMS kIMSI #i.
+    (PlayMS( sidMS, kIMSI ) @ #i) ⇒
+    (∃ IMSI #j. (InsertDB( kIMSI, IMSI ) @ #j) ∧ (#j < #i))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidMS kIMSI #i.
+  (PlayMS( sidMS, kIMSI ) @ #i)
+ ∧
+  ∀ IMSI #j. (InsertDB( kIMSI, IMSI ) @ #j) ⇒ ¬(#j < #i)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥
+         (∃ IMSI #j.
+           (InsertDB( kIMSI, IMSI ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i)) )
+    case case_1
+    solve( PlayMS( sidMS, kIMSI ) @ #i )
+      case MS_in_1
+      solve( MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ▶₀ #i )
+        case InitMobileStationSession
+        by contradiction /* from formulas */
+      qed
+    next
+      case MS_in_2
+      solve( MobileStation2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2
+             ) ▶₀ #i )
+        case MS_out_1
+        by contradiction /* from formulas */
+      qed
+    next
+      case MS_out_1
+      solve( !Pk( pkN ) ▶₀ #i )
+        case InitNetwork
+        solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1 ) ▶₁ #i )
+          case MS_in_1
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case MS_out_2
+      solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq,
+                             xRAND
+             ) ▶₀ #i )
+        case MS_test_Then
+        by contradiction /* from formulas */
+      qed
+    next
+      case MS_test_Else
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq
+             ) ▶₀ #i )
+        case MS_in_2
+        by contradiction /* from formulas */
+      qed
+    next
+      case MS_test_Then
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                             <xRAND, f1(~kIMSI, <xRAND, ~n2>)>
+             ) ▶₀ #i )
+        case MS_in_2
+        by contradiction /* from formulas */
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma initDB [use_induction, reuse]:
+  all-traces
+  "∀ kIMSI IMSI #i.
+    (LookupDB( kIMSI, IMSI ) @ #i) ⇒
+    (∃ #j. (InsertDB( kIMSI, IMSI ) @ #j) ∧ (#j < #i))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ kIMSI IMSI #i.
+  (LookupDB( kIMSI, IMSI ) @ #i)
+ ∧
+  ∀ #j. (InsertDB( kIMSI, IMSI ) @ #j) ⇒ ¬(#j < #i)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥
+         (∃ #j.
+           (InsertDB( ~kIMSI, ~IMSI ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i)) )
+    case case_1
+    solve( !DB( ~kIMSI, ~IMSI ) ▶₀ #i )
+      case InitMobileStationId
+      by contradiction /* from formulas */
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma secrecyKeyDB [use_induction, reuse]:
+  all-traces
+  "∀ kIMSI IMSI #i.
+    (LookupDB( kIMSI, IMSI ) @ #i) ⇒ (¬(∃ #j. !KU( kIMSI ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ kIMSI IMSI #i.
+  (LookupDB( kIMSI, IMSI ) @ #i) ∧ ∃ #j. (!KU( kIMSI ) @ #j)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥ (∀ #j. (!KU( ~kIMSI ) @ #j) ⇒ last(#j)) )
+    case case_1
+    solve( !DB( ~kIMSI, ~IMSI ) ▶₀ #i )
+      case InitMobileStationId
+      solve( Network2( ~sidN, ~skN, ~n1,
+                       aenc(<~kIMSI, ~n1, xn2>, pk(~skN))
+             ) ▶₁ #i )
+        case N_in_1
+        solve( !KU( ~kIMSI ) @ #j.1 )
+          case MS_out_1
+          by solve( !KU( ~skN ) @ #vk.1 )
+        qed
+      qed
+    qed
+  next
+    case case_2
+    solve( !DB( ~kIMSI, ~IMSI ) ▶₀ #i )
+      case InitMobileStationId
+      solve( Network2( ~sidN, ~skN, ~n1,
+                       aenc(<~kIMSI, ~n1, xn2>, pk(~skN))
+             ) ▶₁ #i )
+        case N_in_1
+        solve( !KU( ~kIMSI ) @ #j.1 )
+          case MS_out_1
+          by solve( !KU( ~skN ) @ #vk.1 )
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma secrecyKeyTag [use_induction, reuse]:
+  all-traces
+  "∀ sidMS kIMSI #i.
+    (PlayMS( sidMS, kIMSI ) @ #i) ⇒ (¬(∃ #j. !KU( kIMSI ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidMS kIMSI #i.
+  (PlayMS( sidMS, kIMSI ) @ #i) ∧ ∃ #j. (!KU( kIMSI ) @ #j)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥ (∀ #j. (!KU( ~kIMSI ) @ #j) ⇒ last(#j)) )
+    case case_1
+    solve( PlayMS( sidMS, ~kIMSI ) @ #i )
+      case MS_in_1
+      solve( MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ▶₀ #i )
+        case InitMobileStationSession
+        by solve( !KU( ~kIMSI ) @ #j.1 )
+      qed
+    next
+      case MS_in_2
+      solve( MobileStation2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2
+             ) ▶₀ #i )
+        case MS_out_1
+        by solve( !KU( ~kIMSI ) @ #i )
+      qed
+    next
+      case MS_out_1
+      solve( !Pk( pkN ) ▶₀ #i )
+        case InitNetwork
+        solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1 ) ▶₁ #i )
+          case MS_in_1
+          by solve( !KU( ~kIMSI ) @ #i )
+        qed
+      qed
+    next
+      case MS_out_2
+      solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq,
+                             xRAND
+             ) ▶₀ #i )
+        case MS_test_Then
+        by solve( !KU( ~kIMSI ) @ #i )
+      qed
+    next
+      case MS_test_Else
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq
+             ) ▶₀ #i )
+        case MS_in_2
+        by solve( !KU( ~kIMSI ) @ #i )
+      qed
+    next
+      case MS_test_Then
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                             <xRAND, f1(~kIMSI, <xRAND, ~n2>)>
+             ) ▶₀ #i )
+        case MS_in_2
+        by solve( !KU( ~kIMSI ) @ #i )
+      qed
+    qed
+  next
+    case case_2
+    solve( PlayMS( sidMS, ~kIMSI ) @ #i )
+      case MS_in_1
+      solve( MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ▶₀ #i )
+        case InitMobileStationSession
+        solve( !KU( ~kIMSI ) @ #j.1 )
+          case MS_out_1
+          solve( (¬(#i < #vr.1))  ∥ (¬(#vr.1 < #i))  ∥ (~sidMS = ~sidMS.1) )
+            case case_1
+            by solve( !KU( ~skN ) @ #vk.1 )
+          next
+            case case_2
+            solve( (¬(#i < #vr.5))  ∥ (¬(#vr.5 < #i))  ∥ (~sidMS = ~sidMS.1) )
+              case case_1
+              solve( (¬(#vr.5 < #i))  ∥ (¬(#i < #vr.5))  ∥ (~sidMS.1 = ~sidMS) )
+                case case_1
+                solve( (¬(#vr.5 < #i))  ∥ (~sidMS.1 = ~sidMS) )
+                  case case_1
+                  solve( (#i = #vr.5)  ∥ (#vr.5 < #i) )
+                    case case_1
+                    by solve( !KU( ~skN ) @ #vk.1 )
+                  next
+                    case case_2
+                    by contradiction /* from formulas */
+                  qed
+                next
+                  case case_2
+                  by solve( !KU( ~skN ) @ #vk.1 )
+                qed
+              next
+                case case_2
+                solve( (¬(#vr.5 < #i))  ∥ (~sidMS.1 = ~sidMS) )
+                  case case_1
+                  solve( (#i = #vr.5)  ∥ (#vr.5 < #i) )
+                    case case_1
+                    by solve( !KU( ~skN ) @ #vk.1 )
+                  next
+                    case case_2
+                    by contradiction /* from formulas */
+                  qed
+                next
+                  case case_2
+                  by solve( !KU( ~skN ) @ #vk.1 )
+                qed
+              next
+                case case_3
+                by solve( !KU( ~skN ) @ #vk.1 )
+              qed
+            next
+              case case_2
+              solve( (¬(#vr.5 < #i))  ∥ (¬(#i < #vr.5))  ∥ (~sidMS.1 = ~sidMS) )
+                case case_1
+                solve( (¬(#vr.5 < #i))  ∥ (~sidMS.1 = ~sidMS) )
+                  case case_1
+                  solve( (#vr.5 = #i)  ∥ (#i < #vr.5) )
+                    case case_1
+                    by solve( !KU( ~skN ) @ #vk.1 )
+                  next
+                    case case_2
+                    by solve( !KU( ~skN ) @ #vk.1 )
+                  qed
+                next
+                  case case_2
+                  by solve( !KU( ~skN ) @ #vk.1 )
+                qed
+              next
+                case case_2
+                solve( (¬(#vr.5 < #i))  ∥ (~sidMS.1 = ~sidMS) )
+                  case case_1
+                  solve( (#vr.5 = #i)  ∥ (#i < #vr.5) )
+                    case case_1
+                    by solve( !KU( ~skN ) @ #vk.1 )
+                  next
+                    case case_2
+                    by contradiction /* from formulas */
+                  qed
+                next
+                  case case_2
+                  by solve( !KU( ~skN ) @ #vk.1 )
+                qed
+              next
+                case case_3
+                by solve( !KU( ~skN ) @ #vk.1 )
+              qed
+            next
+              case case_3
+              by solve( !KU( ~skN ) @ #vk.1 )
+            qed
+          next
+            case case_3
+            by solve( !KU( ~skN ) @ #vk.1 )
+          qed
+        qed
+      qed
+    next
+      case MS_in_2
+      solve( MobileStation2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2
+             ) ▶₀ #i )
+        case MS_out_1
+        solve( !KU( ~kIMSI ) @ #j.1 )
+          case MS_out_1
+          solve( (¬(#i < #vr.4))  ∥ (¬(#vr.4 < #i))  ∥ (~sidMS = ~sidMS.1) )
+            case case_1
+            solve( (¬(#vr < #vr.4))  ∥ (¬(#vr.4 < #vr))  ∥
+                   (~sidMS = ~sidMS.1) )
+              case case_1
+              solve( (¬(#vr < #vr.4))  ∥ (¬(#vr.4 < #vr.2))  ∥
+                     (~sidMS = ~sidMS.1) )
+                case case_1
+                solve( (¬(#vr < #vr.7))  ∥ (¬(#vr.7 < #vr))  ∥
+                       (~sidMS = ~sidMS.1) )
+                  case case_1
+                  solve( (¬(#vr.2 < #vr.4))  ∥ (¬(#vr.4 < #vr))  ∥
+                         (~sidMS = ~sidMS.1) )
+                    case case_1
+                    by solve( !KU( ~skN ) @ #vk.2 )
+                  next
+                    case case_2
+                    solve( (¬(#vr.2 < #vr.4))  ∥ (¬(#vr.4 < #vr.2))  ∥
+                           (~sidMS = ~sidMS.1) )
+                      case case_1
+                      by contradiction /* from formulas */
+                    next
+                      case case_2
+                      by solve( !KU( ~skN ) @ #vk.2 )
+                    next
+                      case case_3
+                      by solve( !KU( ~skN ) @ #vk.2 )
+                    qed
+                  next
+                    case case_3
+                    by solve( !KU( ~skN ) @ #vk.2 )
+                  qed
+                next
+                  case case_2
+                  by contradiction /* cyclic */
+                next
+                  case case_3
+                  by solve( !KU( ~skN ) @ #vk.2 )
+                qed
+              next
+                case case_2
+                by solve( !KU( ~skN ) @ #vk.2 )
+              next
+                case case_3
+                by solve( !KU( ~skN ) @ #vk.2 )
+              qed
+            next
+              case case_2
+              solve( (¬(#vr < #vr.4))  ∥ (¬(#vr.4 < #vr.2))  ∥
+                     (~sidMS = ~sidMS.1) )
+                case case_1
+                solve( (¬(#vr < #vr.7))  ∥ (¬(#vr.7 < #vr))  ∥
+                       (~sidMS = ~sidMS.1) )
+                  case case_1
+                  solve( (¬(#vr.2 < #vr.4))  ∥ (¬(#vr.4 < #vr))  ∥
+                         (~sidMS = ~sidMS.1) )
+                    case case_1
+                    by contradiction /* from formulas */
+                  next
+                    case case_2
+                    solve( (¬(#vr.2 < #vr.4))  ∥ (¬(#vr.4 < #vr.2))  ∥
+                           (~sidMS = ~sidMS.1) )
+                      case case_1
+                      by contradiction /* from formulas */
+                    next
+                      case case_2
+                      by solve( !KU( ~skN ) @ #vk.2 )
+                    next
+                      case case_3
+                      by solve( !KU( ~skN ) @ #vk.2 )
+                    qed
+                  next
+                    case case_3
+                    by solve( !KU( ~skN ) @ #vk.2 )
+                  qed
+                next
+                  case case_2
+                  by contradiction /* cyclic */
+                next
+                  case case_3
+                  by solve( !KU( ~skN ) @ #vk.2 )
+                qed
+              next
+                case case_2
+                by solve( !KU( ~skN ) @ #vk.2 )
+              next
+                case case_3
+                by solve( !KU( ~skN ) @ #vk.2 )
+              qed
+            next
+              case case_3
+              by solve( !KU( ~skN ) @ #vk.2 )
+            qed
+          next
+            case case_2
+            solve( (¬(#i < #vr.7))  ∥ (¬(#vr.7 < #i))  ∥ (~sidMS = ~sidMS.1) )
+              case case_1
+              by contradiction /* cyclic */
+            next
+              case case_2
+              by solve( !KU( ~skN ) @ #vk.2 )
+            next
+              case case_3
+              by contradiction /* cyclic */
+            qed
+          next
+            case case_3
+            by solve( !KU( ~skN ) @ #vk.2 )
+          qed
+        qed
+      qed
+    next
+      case MS_out_1
+      solve( !Pk( pkN ) ▶₀ #i )
+        case InitNetwork
+        solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1 ) ▶₁ #i )
+          case MS_in_1
+          solve( !KU( ~kIMSI ) @ #j.1 )
+            case MS_out_1
+            solve( (¬(#i < #vr.3))  ∥ (¬(#vr.3 < #i))  ∥ (~sidMS = ~sidMS.1) )
+              case case_1
+              solve( (¬(#i < #vr.3))  ∥ (¬(#vr.3 < #vr.1))  ∥
+                     (~sidMS = ~sidMS.1) )
+                case case_1
+                solve( (¬(#i < #vr.6))  ∥ (¬(#vr.6 < #i))  ∥ (~sidMS = ~sidMS.1) )
+                  case case_1
+                  solve( (¬(#vr.1 < #vr.3))  ∥ (¬(#vr.3 < #i))  ∥
+                         (~sidMS = ~sidMS.1) )
+                    case case_1
+                    by solve( !KU( ~skN ) @ #vk.1 )
+                  next
+                    case case_2
+                    solve( (¬(#vr.1 < #vr.3))  ∥ (¬(#vr.3 < #vr.1))  ∥
+                           (~sidMS = ~sidMS.1) )
+                      case case_1
+                      by contradiction /* from formulas */
+                    next
+                      case case_2
+                      solve( (¬(#vr.1 < #vr.6))  ∥ (¬(#vr.6 < #vr.1))  ∥
+                             (~sidMS = ~sidMS.1) )
+                        case case_1
+                        solve( (¬(#vr.3 < #i))  ∥ (¬(#i < #vr.3))  ∥ (~sidMS.1 = ~sidMS) )
+                          case case_1
+                          solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                                 (~sidMS.1 = ~sidMS) )
+                            case case_1
+                            solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* from formulas */
+                            qed
+                          next
+                            case case_2
+                            solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* from formulas */
+                            qed
+                          next
+                            case case_3
+                            by solve( !KU( ~skN ) @ #vk.1 )
+                          qed
+                        next
+                          case case_2
+                          solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                                 (~sidMS.1 = ~sidMS) )
+                            case case_1
+                            solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* from formulas */
+                            qed
+                          next
+                            case case_2
+                            solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* from formulas */
+                            qed
+                          next
+                            case case_3
+                            by solve( !KU( ~skN ) @ #vk.1 )
+                          qed
+                        next
+                          case case_3
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        qed
+                      next
+                        case case_2
+                        solve( (¬(#vr.3 < #i))  ∥ (¬(#i < #vr.3))  ∥ (~sidMS.1 = ~sidMS) )
+                          case case_1
+                          solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                                 (~sidMS.1 = ~sidMS) )
+                            case case_1
+                            solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* from formulas */
+                            qed
+                          next
+                            case case_2
+                            solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* from formulas */
+                            qed
+                          next
+                            case case_3
+                            by solve( !KU( ~skN ) @ #vk.1 )
+                          qed
+                        next
+                          case case_2
+                          solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                                 (~sidMS.1 = ~sidMS) )
+                            case case_1
+                            solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* from formulas */
+                            qed
+                          next
+                            case case_2
+                            solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* from formulas */
+                            qed
+                          next
+                            case case_3
+                            by solve( !KU( ~skN ) @ #vk.1 )
+                          qed
+                        next
+                          case case_3
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        qed
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.1 )
+                      qed
+                    next
+                      case case_3
+                      by solve( !KU( ~skN ) @ #vk.1 )
+                    qed
+                  next
+                    case case_3
+                    by solve( !KU( ~skN ) @ #vk.1 )
+                  qed
+                next
+                  case case_2
+                  by contradiction /* from formulas */
+                next
+                  case case_3
+                  by solve( !KU( ~skN ) @ #vk.1 )
+                qed
+              next
+                case case_2
+                solve( (¬(#i < #vr.6))  ∥ (¬(#vr.6 < #i))  ∥ (~sidMS = ~sidMS.1) )
+                  case case_1
+                  solve( (¬(#vr.1 < #vr.6))  ∥ (¬(#vr.6 < #vr.1))  ∥
+                         (~sidMS = ~sidMS.1) )
+                    case case_1
+                    solve( (¬(#vr.3 < #i))  ∥ (¬(#i < #vr.3))  ∥ (~sidMS.1 = ~sidMS) )
+                      case case_1
+                      solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                             (~sidMS.1 = ~sidMS) )
+                        case case_1
+                        solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_2
+                        solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.1 )
+                      qed
+                    next
+                      case case_2
+                      solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                             (~sidMS.1 = ~sidMS) )
+                        case case_1
+                        solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_2
+                        solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.1 )
+                      qed
+                    next
+                      case case_3
+                      by solve( !KU( ~skN ) @ #vk.1 )
+                    qed
+                  next
+                    case case_2
+                    solve( (¬(#vr.3 < #i))  ∥ (¬(#i < #vr.3))  ∥ (~sidMS.1 = ~sidMS) )
+                      case case_1
+                      solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                             (~sidMS.1 = ~sidMS) )
+                        case case_1
+                        solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_2
+                        solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.1 )
+                      qed
+                    next
+                      case case_2
+                      solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                             (~sidMS.1 = ~sidMS) )
+                        case case_1
+                        solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_2
+                        solve( (#i = #vr.3)  ∥ (#vr.3 < #i) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.1 )
+                      qed
+                    next
+                      case case_3
+                      by solve( !KU( ~skN ) @ #vk.1 )
+                    qed
+                  next
+                    case case_3
+                    by solve( !KU( ~skN ) @ #vk.1 )
+                  qed
+                next
+                  case case_2
+                  by contradiction /* from formulas */
+                next
+                  case case_3
+                  by solve( !KU( ~skN ) @ #vk.1 )
+                qed
+              next
+                case case_3
+                by solve( !KU( ~skN ) @ #vk.1 )
+              qed
+            next
+              case case_2
+              solve( (¬(#i < #vr.3))  ∥ (¬(#vr.3 < #vr.1))  ∥
+                     (~sidMS = ~sidMS.1) )
+                case case_1
+                solve( (¬(#i < #vr.6))  ∥ (¬(#vr.6 < #i))  ∥ (~sidMS = ~sidMS.1) )
+                  case case_1
+                  solve( (¬(#vr.1 < #vr.3))  ∥ (¬(#vr.3 < #i))  ∥
+                         (~sidMS = ~sidMS.1) )
+                    case case_1
+                    by contradiction /* from formulas */
+                  next
+                    case case_2
+                    solve( (¬(#vr.1 < #vr.3))  ∥ (¬(#vr.3 < #vr.1))  ∥
+                           (~sidMS = ~sidMS.1) )
+                      case case_1
+                      by contradiction /* from formulas */
+                    next
+                      case case_2
+                      solve( (¬(#vr.1 < #vr.6))  ∥ (¬(#vr.6 < #vr.1))  ∥
+                             (~sidMS = ~sidMS.1) )
+                        case case_1
+                        solve( (¬(#vr.3 < #i))  ∥ (¬(#i < #vr.3))  ∥ (~sidMS.1 = ~sidMS) )
+                          case case_1
+                          solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                                 (~sidMS.1 = ~sidMS) )
+                            case case_1
+                            solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* cyclic */
+                            qed
+                          next
+                            case case_2
+                            solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* cyclic */
+                            qed
+                          next
+                            case case_3
+                            by solve( !KU( ~skN ) @ #vk.1 )
+                          qed
+                        next
+                          case case_2
+                          solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                                 (~sidMS.1 = ~sidMS) )
+                            case case_1
+                            solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* cyclic */
+                            qed
+                          next
+                            case case_2
+                            solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* cyclic */
+                            qed
+                          next
+                            case case_3
+                            by solve( !KU( ~skN ) @ #vk.1 )
+                          qed
+                        next
+                          case case_3
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        qed
+                      next
+                        case case_2
+                        solve( (¬(#vr.3 < #i))  ∥ (¬(#i < #vr.3))  ∥ (~sidMS.1 = ~sidMS) )
+                          case case_1
+                          solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                                 (~sidMS.1 = ~sidMS) )
+                            case case_1
+                            solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* cyclic */
+                            qed
+                          next
+                            case case_2
+                            solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* cyclic */
+                            qed
+                          next
+                            case case_3
+                            by solve( !KU( ~skN ) @ #vk.1 )
+                          qed
+                        next
+                          case case_2
+                          solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                                 (~sidMS.1 = ~sidMS) )
+                            case case_1
+                            solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* cyclic */
+                            qed
+                          next
+                            case case_2
+                            solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                              case case_1
+                              by solve( !KU( ~skN ) @ #vk.1 )
+                            next
+                              case case_2
+                              by contradiction /* cyclic */
+                            qed
+                          next
+                            case case_3
+                            by solve( !KU( ~skN ) @ #vk.1 )
+                          qed
+                        next
+                          case case_3
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        qed
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.1 )
+                      qed
+                    next
+                      case case_3
+                      by solve( !KU( ~skN ) @ #vk.1 )
+                    qed
+                  next
+                    case case_3
+                    by solve( !KU( ~skN ) @ #vk.1 )
+                  qed
+                next
+                  case case_2
+                  by contradiction /* from formulas */
+                next
+                  case case_3
+                  by solve( !KU( ~skN ) @ #vk.1 )
+                qed
+              next
+                case case_2
+                solve( (¬(#i < #vr.6))  ∥ (¬(#vr.6 < #i))  ∥ (~sidMS = ~sidMS.1) )
+                  case case_1
+                  solve( (¬(#vr.1 < #vr.6))  ∥ (¬(#vr.6 < #vr.1))  ∥
+                         (~sidMS = ~sidMS.1) )
+                    case case_1
+                    solve( (¬(#vr.3 < #i))  ∥ (¬(#i < #vr.3))  ∥ (~sidMS.1 = ~sidMS) )
+                      case case_1
+                      solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                             (~sidMS.1 = ~sidMS) )
+                        case case_1
+                        solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_2
+                        solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.1 )
+                      qed
+                    next
+                      case case_2
+                      solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                             (~sidMS.1 = ~sidMS) )
+                        case case_1
+                        solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_2
+                        solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.1 )
+                      qed
+                    next
+                      case case_3
+                      by solve( !KU( ~skN ) @ #vk.1 )
+                    qed
+                  next
+                    case case_2
+                    solve( (¬(#vr.3 < #i))  ∥ (¬(#i < #vr.3))  ∥ (~sidMS.1 = ~sidMS) )
+                      case case_1
+                      solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                             (~sidMS.1 = ~sidMS) )
+                        case case_1
+                        solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_2
+                        solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.1 )
+                      qed
+                    next
+                      case case_2
+                      solve( (¬(#vr.6 < #vr.1))  ∥ (¬(#vr.1 < #vr.6))  ∥
+                             (~sidMS.1 = ~sidMS) )
+                        case case_1
+                        solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_2
+                        solve( (#vr.3 = #i)  ∥ (#i < #vr.3) )
+                          case case_1
+                          by solve( !KU( ~skN ) @ #vk.1 )
+                        next
+                          case case_2
+                          by contradiction /* cyclic */
+                        qed
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.1 )
+                      qed
+                    next
+                      case case_3
+                      by solve( !KU( ~skN ) @ #vk.1 )
+                    qed
+                  next
+                    case case_3
+                    by solve( !KU( ~skN ) @ #vk.1 )
+                  qed
+                next
+                  case case_2
+                  by solve( !KU( ~skN ) @ #vk.1 )
+                next
+                  case case_3
+                  by solve( !KU( ~skN ) @ #vk.1 )
+                qed
+              next
+                case case_3
+                by solve( !KU( ~skN ) @ #vk.1 )
+              qed
+            next
+              case case_3
+              by solve( !KU( ~skN ) @ #vk.1 )
+            qed
+          qed
+        qed
+      qed
+    next
+      case MS_out_2
+      solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq,
+                             xRAND
+             ) ▶₀ #i )
+        case MS_test_Then
+        solve( !KU( ~kIMSI ) @ #j.1 )
+          case MS_out_1
+          solve( (¬(#i < #vr.6))  ∥ (¬(#vr.6 < #i))  ∥ (~sidMS = ~sidMS.1) )
+            case case_1
+            solve( (¬(#vr < #vr.6))  ∥ (¬(#vr.6 < #vr))  ∥
+                   (~sidMS = ~sidMS.1) )
+              case case_1
+              solve( (¬(#vr.1 < #vr.6))  ∥ (¬(#vr.6 < #vr.1))  ∥
+                     (~sidMS = ~sidMS.1) )
+                case case_1
+                solve( (¬(#vr.2 < #vr.6))  ∥ (¬(#vr.6 < #vr.2))  ∥
+                       (~sidMS = ~sidMS.1) )
+                  case case_1
+                  solve( (¬(#vr.2 < #vr.6))  ∥ (¬(#vr.6 < #vr.4))  ∥
+                         (~sidMS = ~sidMS.1) )
+                    case case_1
+                    solve( (¬(#vr.2 < #vr.9))  ∥ (¬(#vr.9 < #vr.2))  ∥
+                           (~sidMS = ~sidMS.1) )
+                      case case_1
+                      solve( (¬(#vr.4 < #vr.6))  ∥ (¬(#vr.6 < #vr.2))  ∥
+                             (~sidMS = ~sidMS.1) )
+                        case case_1
+                        by solve( !KU( ~skN ) @ #vk.4 )
+                      next
+                        case case_2
+                        solve( (¬(#vr.4 < #vr.6))  ∥ (¬(#vr.6 < #vr.4))  ∥
+                               (~sidMS = ~sidMS.1) )
+                          case case_1
+                          by contradiction /* from formulas */
+                        next
+                          case case_2
+                          by solve( !KU( ~skN ) @ #vk.4 )
+                        next
+                          case case_3
+                          by solve( !KU( ~skN ) @ #vk.4 )
+                        qed
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.4 )
+                      qed
+                    next
+                      case case_2
+                      by contradiction /* cyclic */
+                    next
+                      case case_3
+                      by solve( !KU( ~skN ) @ #vk.4 )
+                    qed
+                  next
+                    case case_2
+                    by solve( !KU( ~skN ) @ #vk.4 )
+                  next
+                    case case_3
+                    by solve( !KU( ~skN ) @ #vk.4 )
+                  qed
+                next
+                  case case_2
+                  solve( (¬(#vr.2 < #vr.6))  ∥ (¬(#vr.6 < #vr.4))  ∥
+                         (~sidMS = ~sidMS.1) )
+                    case case_1
+                    solve( (¬(#vr.2 < #vr.9))  ∥ (¬(#vr.9 < #vr.2))  ∥
+                           (~sidMS = ~sidMS.1) )
+                      case case_1
+                      solve( (¬(#vr.4 < #vr.6))  ∥ (¬(#vr.6 < #vr.2))  ∥
+                             (~sidMS = ~sidMS.1) )
+                        case case_1
+                        by contradiction /* from formulas */
+                      next
+                        case case_2
+                        solve( (¬(#vr.4 < #vr.6))  ∥ (¬(#vr.6 < #vr.4))  ∥
+                               (~sidMS = ~sidMS.1) )
+                          case case_1
+                          by contradiction /* from formulas */
+                        next
+                          case case_2
+                          by solve( !KU( ~skN ) @ #vk.4 )
+                        next
+                          case case_3
+                          by solve( !KU( ~skN ) @ #vk.4 )
+                        qed
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.4 )
+                      qed
+                    next
+                      case case_2
+                      by contradiction /* cyclic */
+                    next
+                      case case_3
+                      by solve( !KU( ~skN ) @ #vk.4 )
+                    qed
+                  next
+                    case case_2
+                    by solve( !KU( ~skN ) @ #vk.4 )
+                  next
+                    case case_3
+                    by solve( !KU( ~skN ) @ #vk.4 )
+                  qed
+                next
+                  case case_3
+                  by solve( !KU( ~skN ) @ #vk.4 )
+                qed
+              next
+                case case_2
+                by contradiction /* cyclic */
+              next
+                case case_3
+                by solve( !KU( ~skN ) @ #vk.4 )
+              qed
+            next
+              case case_2
+              by contradiction /* cyclic */
+            next
+              case case_3
+              by solve( !KU( ~skN ) @ #vk.4 )
+            qed
+          next
+            case case_2
+            solve( (¬(#i < #vr.9))  ∥ (¬(#vr.9 < #i))  ∥ (~sidMS = ~sidMS.1) )
+              case case_1
+              by contradiction /* cyclic */
+            next
+              case case_2
+              by solve( !KU( ~skN ) @ #vk.4 )
+            next
+              case case_3
+              by contradiction /* cyclic */
+            qed
+          next
+            case case_3
+            by solve( !KU( ~skN ) @ #vk.4 )
+          qed
+        qed
+      qed
+    next
+      case MS_test_Else
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq
+             ) ▶₀ #i )
+        case MS_in_2
+        solve( !KU( ~kIMSI ) @ #j.1 )
+          case MS_out_1
+          solve( (¬(#i < #vr.5))  ∥ (¬(#vr.5 < #i))  ∥ (~sidMS = ~sidMS.1) )
+            case case_1
+            solve( (¬(#vr < #vr.5))  ∥ (¬(#vr.5 < #vr))  ∥
+                   (~sidMS = ~sidMS.1) )
+              case case_1
+              solve( (¬(#vr.1 < #vr.5))  ∥ (¬(#vr.5 < #vr.1))  ∥
+                     (~sidMS = ~sidMS.1) )
+                case case_1
+                solve( (¬(#vr.1 < #vr.5))  ∥ (¬(#vr.5 < #vr.3))  ∥
+                       (~sidMS = ~sidMS.1) )
+                  case case_1
+                  solve( (¬(#vr.1 < #vr.8))  ∥ (¬(#vr.8 < #vr.1))  ∥
+                         (~sidMS = ~sidMS.1) )
+                    case case_1
+                    solve( (¬(#vr.3 < #vr.5))  ∥ (¬(#vr.5 < #vr.1))  ∥
+                           (~sidMS = ~sidMS.1) )
+                      case case_1
+                      by solve( !KU( ~skN ) @ #vk.2 )
+                    next
+                      case case_2
+                      solve( (¬(#vr.3 < #vr.5))  ∥ (¬(#vr.5 < #vr.3))  ∥
+                             (~sidMS = ~sidMS.1) )
+                        case case_1
+                        by contradiction /* from formulas */
+                      next
+                        case case_2
+                        by solve( !KU( ~skN ) @ #vk.2 )
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.2 )
+                      qed
+                    next
+                      case case_3
+                      by solve( !KU( ~skN ) @ #vk.2 )
+                    qed
+                  next
+                    case case_2
+                    by contradiction /* cyclic */
+                  next
+                    case case_3
+                    by solve( !KU( ~skN ) @ #vk.2 )
+                  qed
+                next
+                  case case_2
+                  by solve( !KU( ~skN ) @ #vk.2 )
+                next
+                  case case_3
+                  by solve( !KU( ~skN ) @ #vk.2 )
+                qed
+              next
+                case case_2
+                solve( (¬(#vr.1 < #vr.5))  ∥ (¬(#vr.5 < #vr.3))  ∥
+                       (~sidMS = ~sidMS.1) )
+                  case case_1
+                  solve( (¬(#vr.1 < #vr.8))  ∥ (¬(#vr.8 < #vr.1))  ∥
+                         (~sidMS = ~sidMS.1) )
+                    case case_1
+                    solve( (¬(#vr.3 < #vr.5))  ∥ (¬(#vr.5 < #vr.1))  ∥
+                           (~sidMS = ~sidMS.1) )
+                      case case_1
+                      by contradiction /* from formulas */
+                    next
+                      case case_2
+                      solve( (¬(#vr.3 < #vr.5))  ∥ (¬(#vr.5 < #vr.3))  ∥
+                             (~sidMS = ~sidMS.1) )
+                        case case_1
+                        by contradiction /* from formulas */
+                      next
+                        case case_2
+                        by solve( !KU( ~skN ) @ #vk.2 )
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.2 )
+                      qed
+                    next
+                      case case_3
+                      by solve( !KU( ~skN ) @ #vk.2 )
+                    qed
+                  next
+                    case case_2
+                    by contradiction /* cyclic */
+                  next
+                    case case_3
+                    by solve( !KU( ~skN ) @ #vk.2 )
+                  qed
+                next
+                  case case_2
+                  by solve( !KU( ~skN ) @ #vk.2 )
+                next
+                  case case_3
+                  by solve( !KU( ~skN ) @ #vk.2 )
+                qed
+              next
+                case case_3
+                by solve( !KU( ~skN ) @ #vk.2 )
+              qed
+            next
+              case case_2
+              by contradiction /* cyclic */
+            next
+              case case_3
+              by solve( !KU( ~skN ) @ #vk.2 )
+            qed
+          next
+            case case_2
+            solve( (¬(#i < #vr.8))  ∥ (¬(#vr.8 < #i))  ∥ (~sidMS = ~sidMS.1) )
+              case case_1
+              by contradiction /* cyclic */
+            next
+              case case_2
+              by solve( !KU( ~skN ) @ #vk.2 )
+            next
+              case case_3
+              by contradiction /* cyclic */
+            qed
+          next
+            case case_3
+            by solve( !KU( ~skN ) @ #vk.2 )
+          qed
+        qed
+      qed
+    next
+      case MS_test_Then
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                             <xRAND, f1(~kIMSI, <xRAND, ~n2>)>
+             ) ▶₀ #i )
+        case MS_in_2
+        solve( !KU( ~kIMSI ) @ #j.1 )
+          case MS_out_1
+          solve( (¬(#i < #vr.5))  ∥ (¬(#vr.5 < #i))  ∥ (~sidMS = ~sidMS.1) )
+            case case_1
+            solve( (¬(#vr < #vr.5))  ∥ (¬(#vr.5 < #vr))  ∥
+                   (~sidMS = ~sidMS.1) )
+              case case_1
+              solve( (¬(#vr.1 < #vr.5))  ∥ (¬(#vr.5 < #vr.1))  ∥
+                     (~sidMS = ~sidMS.1) )
+                case case_1
+                solve( (¬(#vr.1 < #vr.5))  ∥ (¬(#vr.5 < #vr.3))  ∥
+                       (~sidMS = ~sidMS.1) )
+                  case case_1
+                  solve( (¬(#vr.1 < #vr.8))  ∥ (¬(#vr.8 < #vr.1))  ∥
+                         (~sidMS = ~sidMS.1) )
+                    case case_1
+                    solve( (¬(#vr.3 < #vr.5))  ∥ (¬(#vr.5 < #vr.1))  ∥
+                           (~sidMS = ~sidMS.1) )
+                      case case_1
+                      by solve( !KU( ~skN ) @ #vk.4 )
+                    next
+                      case case_2
+                      solve( (¬(#vr.3 < #vr.5))  ∥ (¬(#vr.5 < #vr.3))  ∥
+                             (~sidMS = ~sidMS.1) )
+                        case case_1
+                        by contradiction /* from formulas */
+                      next
+                        case case_2
+                        by solve( !KU( ~skN ) @ #vk.4 )
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.4 )
+                      qed
+                    next
+                      case case_3
+                      by solve( !KU( ~skN ) @ #vk.4 )
+                    qed
+                  next
+                    case case_2
+                    by contradiction /* cyclic */
+                  next
+                    case case_3
+                    by solve( !KU( ~skN ) @ #vk.4 )
+                  qed
+                next
+                  case case_2
+                  by solve( !KU( ~skN ) @ #vk.4 )
+                next
+                  case case_3
+                  by solve( !KU( ~skN ) @ #vk.4 )
+                qed
+              next
+                case case_2
+                solve( (¬(#vr.1 < #vr.5))  ∥ (¬(#vr.5 < #vr.3))  ∥
+                       (~sidMS = ~sidMS.1) )
+                  case case_1
+                  solve( (¬(#vr.1 < #vr.8))  ∥ (¬(#vr.8 < #vr.1))  ∥
+                         (~sidMS = ~sidMS.1) )
+                    case case_1
+                    solve( (¬(#vr.3 < #vr.5))  ∥ (¬(#vr.5 < #vr.1))  ∥
+                           (~sidMS = ~sidMS.1) )
+                      case case_1
+                      by contradiction /* from formulas */
+                    next
+                      case case_2
+                      solve( (¬(#vr.3 < #vr.5))  ∥ (¬(#vr.5 < #vr.3))  ∥
+                             (~sidMS = ~sidMS.1) )
+                        case case_1
+                        by contradiction /* from formulas */
+                      next
+                        case case_2
+                        by solve( !KU( ~skN ) @ #vk.4 )
+                      next
+                        case case_3
+                        by solve( !KU( ~skN ) @ #vk.4 )
+                      qed
+                    next
+                      case case_3
+                      by solve( !KU( ~skN ) @ #vk.4 )
+                    qed
+                  next
+                    case case_2
+                    by contradiction /* cyclic */
+                  next
+                    case case_3
+                    by solve( !KU( ~skN ) @ #vk.4 )
+                  qed
+                next
+                  case case_2
+                  by solve( !KU( ~skN ) @ #vk.4 )
+                next
+                  case case_3
+                  by solve( !KU( ~skN ) @ #vk.4 )
+                qed
+              next
+                case case_3
+                by solve( !KU( ~skN ) @ #vk.4 )
+              qed
+            next
+              case case_2
+              by contradiction /* cyclic */
+            next
+              case case_3
+              by solve( !KU( ~skN ) @ #vk.4 )
+            qed
+          next
+            case case_2
+            solve( (¬(#i < #vr.8))  ∥ (¬(#vr.8 < #i))  ∥ (~sidMS = ~sidMS.1) )
+              case case_1
+              by contradiction /* cyclic */
+            next
+              case case_2
+              by solve( !KU( ~skN ) @ #vk.4 )
+            next
+              case case_3
+              by contradiction /* cyclic */
+            qed
+          next
+            case case_3
+            by solve( !KU( ~skN ) @ #vk.4 )
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma WA_MobileStation [use_induction]:
+  all-traces
+  "∀ sidMS #i7.
+    (TestMS_Then( sidMS ) @ #i7) ⇒
+    (∃ kIMSI IMSI n1 mID mReq sidN skN n2 #i1 #i2 #i3 #i4 #i5 #i6.
+      (((((((((((InMS2( sidMS, kIMSI, IMSI, n1, mID, mReq ) @ #i6) ∧
+                (OutN2( sidN, skN, n1, mID, mReq ) @ #i5)) ∧
+               (InN1( sidN, skN, n1, mID ) @ #i4)) ∧
+              (OutMS1( sidMS, kIMSI, IMSI, n2, n1, mID ) @ #i3)) ∧
+             (InMS1( sidMS, kIMSI, IMSI, n1 ) @ #i2)) ∧
+            (OutN1( sidN, skN, n1 ) @ #i1)) ∧
+           (#i1 < #i2)) ∧
+          (#i2 < #i3)) ∧
+         (#i3 < #i4)) ∧
+        (#i4 < #i5)) ∧
+       (#i5 < #i6)) ∧
+      (#i6 < #i7))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidMS #i7.
+  (TestMS_Then( sidMS ) @ #i7)
+ ∧
+  ∀ kIMSI IMSI n1 mID mReq sidN skN n2 #i1 #i2 #i3 #i4 #i5 #i6.
+   (InMS2( sidMS, kIMSI, IMSI, n1, mID, mReq ) @ #i6) ∧
+   (OutN2( sidN, skN, n1, mID, mReq ) @ #i5) ∧
+   (InN1( sidN, skN, n1, mID ) @ #i4) ∧
+   (OutMS1( sidMS, kIMSI, IMSI, n2, n1, mID ) @ #i3) ∧
+   (InMS1( sidMS, kIMSI, IMSI, n1 ) @ #i2) ∧
+   (OutN1( sidN, skN, n1 ) @ #i1)
+  ⇒
+   ((¬(#i1 < #i2)) ∨
+    (¬(#i2 < #i3)) ∨
+    (¬(#i3 < #i4)) ∨
+    (¬(#i4 < #i5)) ∨
+    (¬(#i5 < #i6)) ∨
+    (¬(#i6 < #i7)))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i7))  ∥
+         (∃ kIMSI IMSI n1 mID mReq sidN skN n2 #i1 #i2 #i3 #i4 #i5 #i6.
+           (InMS2( ~sidMS, kIMSI, IMSI, n1, mID, mReq ) @ #i6) ∧
+           (OutN2( sidN, skN, n1, mID, mReq ) @ #i5) ∧
+           (InN1( sidN, skN, n1, mID ) @ #i4) ∧
+           (OutMS1( ~sidMS, kIMSI, IMSI, n2, n1, mID ) @ #i3) ∧
+           (InMS1( ~sidMS, kIMSI, IMSI, n1 ) @ #i2) ∧
+           (OutN1( sidN, skN, n1 ) @ #i1)
+          ∧
+           (¬(last(#i6))) ∧
+           (¬(last(#i5))) ∧
+           (¬(last(#i4))) ∧
+           (¬(last(#i3))) ∧
+           (¬(last(#i2))) ∧
+           (¬(last(#i1))) ∧
+           (#i1 < #i2) ∧
+           (#i2 < #i3) ∧
+           (#i3 < #i4) ∧
+           (#i4 < #i5) ∧
+           (#i5 < #i6) ∧
+           (#i6 < #i7)) )
+    case case_1
+    solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                           <xRAND, f1(~kIMSI, <xRAND, ~n2>)>
+           ) ▶₀ #i7 )
+      case MS_in_2
+      solve( !KU( f1(~kIMSI, <xRAND, ~n2>) ) @ #vk.3 )
+        case N_out_2
+        solve( !KU( ~RAND ) @ #vk.3 )
+          case N_out_2
+          solve( !KU( aenc(<~kIMSI, ~n1, ~n2>, pk(~skN)) ) @ #vk.4 )
+            case MS_out_1
+            solve( !KU( ~n1 ) @ #vk.4 )
+              case N_out_1
+              by contradiction /* cyclic */
+            qed
+          next
+            case c_aenc
+            by contradiction /* from formulas */
+          qed
+        qed
+      next
+        case c_f1
+        by contradiction /* from formulas */
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma WA_Network_1 [use_induction]:
+  all-traces
+  "∀ sidN skN #i5.
+    (TestN1( sidN, skN ) @ #i5) ⇒
+    (∃ n1 mID sidMS kIMSI IMSI n2 #i1 #i2 #i3 #i4.
+      (((((((InN1( sidN, skN, n1, mID ) @ #i4) ∧
+            (OutMS1( sidMS, kIMSI, IMSI, n2, n1, mID ) @ #i3)) ∧
+           (InMS1( sidMS, kIMSI, IMSI, n1 ) @ #i2)) ∧
+          (OutN1( sidN, skN, n1 ) @ #i1)) ∧
+         (#i1 < #i2)) ∧
+        (#i2 < #i3)) ∧
+       (#i3 < #i4)) ∧
+      (#i4 < #i5))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidN skN #i5.
+  (TestN1( sidN, skN ) @ #i5)
+ ∧
+  ∀ n1 mID sidMS kIMSI IMSI n2 #i1 #i2 #i3 #i4.
+   (InN1( sidN, skN, n1, mID ) @ #i4) ∧
+   (OutMS1( sidMS, kIMSI, IMSI, n2, n1, mID ) @ #i3) ∧
+   (InMS1( sidMS, kIMSI, IMSI, n1 ) @ #i2) ∧
+   (OutN1( sidN, skN, n1 ) @ #i1)
+  ⇒
+   ((¬(#i1 < #i2)) ∨
+    (¬(#i2 < #i3)) ∨
+    (¬(#i3 < #i4)) ∨
+    (¬(#i4 < #i5)))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i5))  ∥
+         (∃ n1 mID sidMS kIMSI IMSI n2 #i1 #i2 #i3 #i4.
+           (InN1( ~sidN, ~skN, n1, mID ) @ #i4) ∧
+           (OutMS1( sidMS, kIMSI, IMSI, n2, n1, mID ) @ #i3) ∧
+           (InMS1( sidMS, kIMSI, IMSI, n1 ) @ #i2) ∧
+           (OutN1( ~sidN, ~skN, n1 ) @ #i1)
+          ∧
+           (¬(last(#i4))) ∧
+           (¬(last(#i3))) ∧
+           (¬(last(#i2))) ∧
+           (¬(last(#i1))) ∧
+           (#i1 < #i2) ∧
+           (#i2 < #i3) ∧
+           (#i3 < #i4) ∧
+           (#i4 < #i5)) )
+    case case_1
+    solve( !DB( ~kIMSI, ~IMSI ) ▶₀ #i5 )
+      case InitMobileStationId
+      solve( Network2( ~sidN, ~skN, ~n1,
+                       aenc(<~kIMSI, ~n1, xn2>, pk(~skN))
+             ) ▶₁ #i5 )
+        case N_in_1
+        solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk )
+          case MS_out_1
+          solve( !KU( ~n1 ) @ #vk.1 )
+            case N_out_1
+            by contradiction /* cyclic */
+          qed
+        next
+          case c_aenc
+          by contradiction /* from formulas */
+        qed
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma WA_Network_2 [use_induction]:
+  all-traces
+  "∀ sidN skN #i9.
+    (TestN2_Then( sidN, skN ) @ #i9) ⇒
+    (∃ kIMSI_DB RAND n1 mID mReq mRes sidMS kIMSI IMSI n2 #i1 #i2 #i3
+       #i4 #i5 #i6 #i7 #i8.
+      (((((((((((((((InN2( sidN, skN, kIMSI_DB, RAND, n1, mID, mReq, mRes
+                     ) @ #i8) ∧
+                    (OutMS2( sidMS, kIMSI, IMSI, n1, mID, mReq, mRes ) @ #i7)) ∧
+                   (InMS2( sidMS, kIMSI, IMSI, n1, mID, mReq ) @ #i6)) ∧
+                  (OutN2( sidN, skN, n1, mID, mReq ) @ #i5)) ∧
+                 (InN1( sidN, skN, n1, mID ) @ #i4)) ∧
+                (OutMS1( sidMS, kIMSI, IMSI, n2, n1, mID ) @ #i3)) ∧
+               (InMS1( sidMS, kIMSI, IMSI, n1 ) @ #i2)) ∧
+              (OutN1( sidN, skN, n1 ) @ #i1)) ∧
+             (#i1 < #i2)) ∧
+            (#i2 < #i3)) ∧
+           (#i3 < #i4)) ∧
+          (#i4 < #i5)) ∧
+         (#i5 < #i6)) ∧
+        (#i6 < #i7)) ∧
+       (#i7 < #i8)) ∧
+      (#i8 < #i9))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidN skN #i9.
+  (TestN2_Then( sidN, skN ) @ #i9)
+ ∧
+  ∀ kIMSI_DB RAND n1 mID mReq mRes sidMS kIMSI IMSI n2 #i1 #i2 #i3
+    #i4 #i5 #i6 #i7 #i8.
+   (InN2( sidN, skN, kIMSI_DB, RAND, n1, mID, mReq, mRes ) @ #i8) ∧
+   (OutMS2( sidMS, kIMSI, IMSI, n1, mID, mReq, mRes ) @ #i7) ∧
+   (InMS2( sidMS, kIMSI, IMSI, n1, mID, mReq ) @ #i6) ∧
+   (OutN2( sidN, skN, n1, mID, mReq ) @ #i5) ∧
+   (InN1( sidN, skN, n1, mID ) @ #i4) ∧
+   (OutMS1( sidMS, kIMSI, IMSI, n2, n1, mID ) @ #i3) ∧
+   (InMS1( sidMS, kIMSI, IMSI, n1 ) @ #i2) ∧
+   (OutN1( sidN, skN, n1 ) @ #i1)
+  ⇒
+   ((¬(#i1 < #i2)) ∨
+    (¬(#i2 < #i3)) ∨
+    (¬(#i3 < #i4)) ∨
+    (¬(#i4 < #i5)) ∨
+    (¬(#i5 < #i6)) ∨
+    (¬(#i6 < #i7)) ∨
+    (¬(#i7 < #i8)) ∨
+    (¬(#i8 < #i9)))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i9))  ∥
+         (∃ kIMSI_DB RAND n1 mID mReq mRes sidMS kIMSI IMSI n2 #i1 #i2 #i3
+            #i4 #i5 #i6 #i7 #i8.
+           (InN2( ~sidN, ~skN, kIMSI_DB, RAND, n1, mID, mReq, mRes ) @ #i8) ∧
+           (OutMS2( sidMS, kIMSI, IMSI, n1, mID, mReq, mRes ) @ #i7) ∧
+           (InMS2( sidMS, kIMSI, IMSI, n1, mID, mReq ) @ #i6) ∧
+           (OutN2( ~sidN, ~skN, n1, mID, mReq ) @ #i5) ∧
+           (InN1( ~sidN, ~skN, n1, mID ) @ #i4) ∧
+           (OutMS1( sidMS, kIMSI, IMSI, n2, n1, mID ) @ #i3) ∧
+           (InMS1( sidMS, kIMSI, IMSI, n1 ) @ #i2) ∧
+           (OutN1( ~sidN, ~skN, n1 ) @ #i1)
+          ∧
+           (¬(last(#i8))) ∧
+           (¬(last(#i7))) ∧
+           (¬(last(#i6))) ∧
+           (¬(last(#i5))) ∧
+           (¬(last(#i4))) ∧
+           (¬(last(#i3))) ∧
+           (¬(last(#i2))) ∧
+           (¬(last(#i1))) ∧
+           (#i1 < #i2) ∧
+           (#i2 < #i3) ∧
+           (#i3 < #i4) ∧
+           (#i4 < #i5) ∧
+           (#i5 < #i6) ∧
+           (#i6 < #i7) ∧
+           (#i7 < #i8) ∧
+           (#i8 < #i9)) )
+    case case_1
+    solve( Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI, ~RAND,
+                     mReq, f2(~kIMSI, ~RAND)
+           ) ▶₀ #i9 )
+      case N_in_2
+      solve( !KU( f2(~kIMSI, ~RAND) ) @ #vk )
+        case MS_out_2
+        solve( !KU( ~RAND ) @ #vk.3 )
+          case N_out_2
+          solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.2 )
+            case MS_out_1
+            solve( (¬(#vr.11 < #vr.15))  ∥ (¬(#vr.15 < #vr.11))  ∥
+                   (~sidMS = ~sidMS.1) )
+              case case_1
+              solve( (¬(#vr.11 < #vr.15))  ∥ (¬(#vr.15 < #vr.12))  ∥
+                     (~sidMS = ~sidMS.1) )
+                case case_1
+                solve( (¬(#vr.11 < #vr.16))  ∥ (¬(#vr.16 < #vr.11))  ∥
+                       (~sidMS = ~sidMS.1) )
+                  case case_1
+                  solve( (¬(#vr.12 < #vr.15))  ∥ (¬(#vr.15 < #vr.11))  ∥
+                         (~sidMS = ~sidMS.1) )
+                    case case_1
+                    solve( !KU( ~n1 ) @ #vk.6 )
+                      case N_out_1
+                      solve( !KU( f1(~kIMSI, <~RAND, ~n2.1>) ) @ #vk.5 )
+                        case N_out_2
+                        by contradiction /* cyclic */
+                      next
+                        case c_f1
+                        by contradiction /* from formulas */
+                      qed
+                    qed
+                  next
+                    case case_2
+                    solve( (¬(#vr.12 < #vr.15))  ∥ (¬(#vr.15 < #vr.12))  ∥
+                           (~sidMS = ~sidMS.1) )
+                      case case_1
+                      by contradiction /* from formulas */
+                    next
+                      case case_2
+                      solve( !KU( ~n1 ) @ #vk.5 )
+                        case N_out_1
+                        by contradiction /* cyclic */
+                      qed
+                    next
+                      case case_3
+                      solve( !KU( ~n1 ) @ #vk.5 )
+                        case N_out_1
+                        by contradiction /* cyclic */
+                      qed
+                    qed
+                  next
+                    case case_3
+                    solve( !KU( ~n1 ) @ #vk.5 )
+                      case N_out_1
+                      by contradiction /* cyclic */
+                    qed
+                  qed
+                next
+                  case case_2
+                  by contradiction /* cyclic */
+                next
+                  case case_3
+                  solve( !KU( ~n1 ) @ #vk.5 )
+                    case N_out_1
+                    by contradiction /* cyclic */
+                  qed
+                qed
+              next
+                case case_2
+                solve( !KU( ~n1 ) @ #vk.5 )
+                  case N_out_1
+                  by contradiction /* cyclic */
+                qed
+              next
+                case case_3
+                solve( !KU( ~n1 ) @ #vk.5 )
+                  case N_out_1
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_2
+              solve( (¬(#vr.11 < #vr.15))  ∥ (¬(#vr.15 < #vr.12))  ∥
+                     (~sidMS = ~sidMS.1) )
+                case case_1
+                solve( (¬(#vr.11 < #vr.16))  ∥ (¬(#vr.16 < #vr.11))  ∥
+                       (~sidMS = ~sidMS.1) )
+                  case case_1
+                  solve( (¬(#vr.12 < #vr.15))  ∥ (¬(#vr.15 < #vr.11))  ∥
+                         (~sidMS = ~sidMS.1) )
+                    case case_1
+                    by contradiction /* from formulas */
+                  next
+                    case case_2
+                    solve( (¬(#vr.12 < #vr.15))  ∥ (¬(#vr.15 < #vr.12))  ∥
+                           (~sidMS = ~sidMS.1) )
+                      case case_1
+                      by contradiction /* from formulas */
+                    next
+                      case case_2
+                      solve( !KU( ~n1 ) @ #vk.5 )
+                        case N_out_1
+                        by contradiction /* cyclic */
+                      qed
+                    next
+                      case case_3
+                      solve( !KU( ~n1 ) @ #vk.5 )
+                        case N_out_1
+                        by contradiction /* cyclic */
+                      qed
+                    qed
+                  next
+                    case case_3
+                    solve( !KU( ~n1 ) @ #vk.5 )
+                      case N_out_1
+                      by contradiction /* cyclic */
+                    qed
+                  qed
+                next
+                  case case_2
+                  by contradiction /* cyclic */
+                next
+                  case case_3
+                  solve( !KU( ~n1 ) @ #vk.5 )
+                    case N_out_1
+                    by contradiction /* cyclic */
+                  qed
+                qed
+              next
+                case case_2
+                solve( !KU( ~n1 ) @ #vk.5 )
+                  case N_out_1
+                  by contradiction /* cyclic */
+                qed
+              next
+                case case_3
+                solve( !KU( ~n1 ) @ #vk.5 )
+                  case N_out_1
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_3
+              solve( !KU( ~n1 ) @ #vk.5 )
+                case N_out_1
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case c_aenc
+            by contradiction /* from formulas */
+          qed
+        qed
+      next
+        case c_f2
+        by contradiction /* from formulas */
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma ND_MobileStation:
+  all-traces
+  "∀ sidMS kIMSI IMSI n1 mID mReq sidN skN n2 #i1 #i2 #i3 #i4 #i5
+     #i6.
+    (((((((((((InMS2( sidMS, kIMSI, IMSI, n1, mID, mReq ) @ #i6) ∧
+              (OutN2( sidN, skN, n1, mID, mReq ) @ #i5)) ∧
+             (InN1( sidN, skN, n1, mID ) @ #i4)) ∧
+            (OutMS1( sidMS, kIMSI, IMSI, n2, n1, mID ) @ #i3)) ∧
+           (InMS1( sidMS, kIMSI, IMSI, n1 ) @ #i2)) ∧
+          (OutN1( sidN, skN, n1 ) @ #i1)) ∧
+         (#i1 < #i2)) ∧
+        (#i2 < #i3)) ∧
+       (#i3 < #i4)) ∧
+      (#i4 < #i5)) ∧
+     (#i5 < #i6)) ⇒
+    (∃ xRAND. mReq = <xRAND, f1(kIMSI, <xRAND, n2>)>)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidMS kIMSI IMSI n1 mID mReq sidN skN n2 #i1 #i2 #i3 #i4 #i5
+   #i6.
+  (InMS2( sidMS, kIMSI, IMSI, n1, mID, mReq ) @ #i6) ∧
+  (OutN2( sidN, skN, n1, mID, mReq ) @ #i5) ∧
+  (InN1( sidN, skN, n1, mID ) @ #i4) ∧
+  (OutMS1( sidMS, kIMSI, IMSI, n2, n1, mID ) @ #i3) ∧
+  (InMS1( sidMS, kIMSI, IMSI, n1 ) @ #i2) ∧
+  (OutN1( sidN, skN, n1 ) @ #i1)
+ ∧
+  (#i1 < #i2) ∧
+  (#i2 < #i3) ∧
+  (#i3 < #i4) ∧
+  (#i4 < #i5) ∧
+  (#i5 < #i6) ∧
+  (∀ xRAND. (mReq = <xRAND, f1(kIMSI, <xRAND, n2>)>) ⇒ ⊥)"
+*/
+simplify
+solve( Network( ~sidN, ~skN ) ▶₀ #i1 )
+  case InitNetworkSession
+  solve( MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ▶₀ #i2 )
+    case InitMobileStationSession
+    solve( !Pk( pkN ) ▶₀ #i3 )
+      case InitNetwork
+      solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, ~n1 ) ▶₁ #i3 )
+        case MS_in_1
+        solve( Network1( ~sidN, ~skN, ~n1 ) ▶₀ #i4 )
+          case N_out_1
+          solve( Network3( ~sidN, ~skN, ~n1,
+                           aenc(<~kIMSI, ~n1, ~n2>, pk(~skN)), xn2, ~kIMSI.1, ~IMSI.1
+                 ) ▶₀ #i5 )
+            case N_test_1
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma ND_Network_1 [use_induction]:
+  all-traces
+  "∀ sidN skN n1 mID sidMS kIMSI IMSI n2 #i1 #i2 #i3 #i4.
+    (((((((InN1( sidN, skN, n1, mID ) @ #i4) ∧
+          (OutMS1( sidMS, kIMSI, IMSI, n2, n1, mID ) @ #i3)) ∧
+         (InMS1( sidMS, kIMSI, IMSI, n1 ) @ #i2)) ∧
+        (OutN1( sidN, skN, n1 ) @ #i1)) ∧
+       (#i1 < #i2)) ∧
+      (#i2 < #i3)) ∧
+     (#i3 < #i4)) ⇒
+    (∃ kIMSI_DB IMSI_DB xn2 #i0.
+      ((mID = aenc(<kIMSI_DB, n1, xn2>, pk(skN))) ∧
+       (InsertDB( kIMSI_DB, IMSI_DB ) @ #i0)) ∧
+      (#i0 < #i4))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidN skN n1 mID sidMS kIMSI IMSI n2 #i1 #i2 #i3 #i4.
+  (InN1( sidN, skN, n1, mID ) @ #i4) ∧
+  (OutMS1( sidMS, kIMSI, IMSI, n2, n1, mID ) @ #i3) ∧
+  (InMS1( sidMS, kIMSI, IMSI, n1 ) @ #i2) ∧
+  (OutN1( sidN, skN, n1 ) @ #i1)
+ ∧
+  (#i1 < #i2) ∧
+  (#i2 < #i3) ∧
+  (#i3 < #i4) ∧
+  (∀ kIMSI_DB IMSI_DB xn2 #i0.
+    (mID = aenc(<kIMSI_DB, n1, xn2>, pk(skN))) ∧
+    (InsertDB( kIMSI_DB, IMSI_DB ) @ #i0)
+   ⇒
+    ¬(#i0 < #i4))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i4))  ∥
+         (∃ kIMSI_DB IMSI_DB xn2 #i0.
+           (aenc(<~kIMSI, ~n1, ~n2>, pkN) =
+            aenc(<kIMSI_DB, ~n1, xn2>, pk(~skN))) ∧
+           (InsertDB( kIMSI_DB, IMSI_DB ) @ #i0)
+          ∧
+           (¬(last(#i0))) ∧ (#i0 < #i4)) )
+    case case_1
+    solve( Network( ~sidN, ~skN ) ▶₀ #i1 )
+      case InitNetworkSession
+      solve( MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ▶₀ #i2 )
+        case InitMobileStationSession
+        solve( !Pk( pkN ) ▶₀ #i3 )
+          case InitNetwork
+          by contradiction /* from formulas */
+        qed
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma ND_Network_2 [use_induction]:
+  all-traces
+  "∀ sidN skN kIMSI_DB RAND n1 mID mReq mRes sidMS kIMSI IMSI n2 #i1
+     #i2 #i3 #i4 #i5 #i6 #i7 #i8.
+    (((((((((((((((InN2( sidN, skN, kIMSI_DB, RAND, n1, mID, mReq, mRes
+                   ) @ #i8) ∧
+                  (OutMS2( sidMS, kIMSI, IMSI, n1, mID, mReq, mRes ) @ #i7)) ∧
+                 (InMS2( sidMS, kIMSI, IMSI, n1, mID, mReq ) @ #i6)) ∧
+                (OutN2( sidN, skN, n1, mID, mReq ) @ #i5)) ∧
+               (InN1( sidN, skN, n1, mID ) @ #i4)) ∧
+              (OutMS1( sidMS, kIMSI, IMSI, n2, n1, mID ) @ #i3)) ∧
+             (InMS1( sidMS, kIMSI, IMSI, n1 ) @ #i2)) ∧
+            (OutN1( sidN, skN, n1 ) @ #i1)) ∧
+           (#i1 < #i2)) ∧
+          (#i2 < #i3)) ∧
+         (#i3 < #i4)) ∧
+        (#i4 < #i5)) ∧
+       (#i5 < #i6)) ∧
+      (#i6 < #i7)) ∧
+     (#i7 < #i8)) ⇒
+    (mRes = f2(kIMSI_DB, RAND))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidN skN kIMSI_DB RAND n1 mID mReq mRes sidMS kIMSI IMSI n2 #i1
+   #i2 #i3 #i4 #i5 #i6 #i7 #i8.
+  (InN2( sidN, skN, kIMSI_DB, RAND, n1, mID, mReq, mRes ) @ #i8) ∧
+  (OutMS2( sidMS, kIMSI, IMSI, n1, mID, mReq, mRes ) @ #i7) ∧
+  (InMS2( sidMS, kIMSI, IMSI, n1, mID, mReq ) @ #i6) ∧
+  (OutN2( sidN, skN, n1, mID, mReq ) @ #i5) ∧
+  (InN1( sidN, skN, n1, mID ) @ #i4) ∧
+  (OutMS1( sidMS, kIMSI, IMSI, n2, n1, mID ) @ #i3) ∧
+  (InMS1( sidMS, kIMSI, IMSI, n1 ) @ #i2) ∧
+  (OutN1( sidN, skN, n1 ) @ #i1)
+ ∧
+  (#i1 < #i2) ∧
+  (#i2 < #i3) ∧
+  (#i3 < #i4) ∧
+  (#i4 < #i5) ∧
+  (#i5 < #i6) ∧
+  (#i6 < #i7) ∧
+  (#i7 < #i8) ∧
+  (¬(mRes = f2(kIMSI_DB, RAND)))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i8))  ∥ (f2(~kIMSI, xRAND) = f2(~kIMSI.2, ~RAND.1)) )
+    case case_1
+    solve( Network( ~sidN, ~skN ) ▶₀ #i1 )
+      case InitNetworkSession
+      solve( MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ▶₀ #i2 )
+        case InitMobileStationSession
+        solve( !Pk( pkN ) ▶₀ #i3 )
+          case InitNetwork
+          solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, ~n1 ) ▶₁ #i3 )
+            case MS_in_1
+            solve( Network1( ~sidN, ~skN, ~n1 ) ▶₀ #i4 )
+              case N_out_1
+              solve( Network3( ~sidN, ~skN, ~n1,
+                               aenc(<~kIMSI, ~n1, ~n2>, pk(~skN)), xn2, ~kIMSI.1, ~IMSI.1
+                     ) ▶₀ #i5 )
+                case N_test_1
+                solve( MobileStation2( ~sidMS, ~kIMSI, ~IMSI, ~n1,
+                                       aenc(<~kIMSI, ~n1, ~n2>, pk(~skN)), ~n2.1
+                       ) ▶₀ #i6 )
+                  case MS_out_1
+                  solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, ~n1,
+                                         aenc(<~kIMSI, ~n1, ~n2>, pk(~skN)), ~n2.1,
+                                         <~RAND, f1(~kIMSI, <~RAND, ~n2>)>, xRAND
+                         ) ▶₀ #i7 )
+                    case MS_test_Then
+                    solve( Network4( ~sidN, ~skN, ~n1,
+                                     aenc(<~kIMSI, ~n1, ~n2>, pk(~skN)), xn2, ~kIMSI.1, ~IMSI.1,
+                                     ~RAND.1, <~RAND, f1(~kIMSI, <~RAND, ~n2>)>
+                           ) ▶₀ #i8 )
+                      case N_out_2
+                      by contradiction /* from formulas */
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+/* All well-formedness checks were successful. */
+
+end

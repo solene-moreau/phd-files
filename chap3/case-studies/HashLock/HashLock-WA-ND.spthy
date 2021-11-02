@@ -1,0 +1,143 @@
+/*************************************
+HASH-LOCK
+
+[1] A. Juels and S. A. Weis,
+‘Defining Strong Privacy for RFID’,
+in Fifth Annual IEEE International Conference on Pervasive Computing and
+Communications Workshops (PerComW’07), White Plains, NY, USA, 2007, pp. 342–347.
+
+DESCRIPTION OF THE PROTOCOL
+[init.]   kT <-- k, insert k in DB
+[session] R --> T : nR
+          T --> R : < nT, h(<xnR,nT,kT>) >
+          R --> T : OK                      if there exists kR in DB
+                                              such that snd(x) = h(<nR,fst(x),kR>)
+
+PROOFS
+- sanity checks
+  * readerComplete      => true (automatic mode)
+  * tagComplete         => true (automatic mode)
+- well-authentication
+  * WA_Reader           => true (automatic mode)
+- no desynchronisation
+  * ND_Reader           => true (automatic mode)
+*************************************/
+
+theory HashLock_WA_ND
+begin
+
+functions: h/1, OK/0
+
+/*************************************
+PROTOCOL
+*************************************/
+
+rule InitReader:
+  [ Fr(~sidR) ]
+  --[ NewReaderSession(~sidR) ]->
+  [ Reader(~sidR) ]
+
+rule InitTagId:
+  [ Fr(~k) ]
+  --[ NewId(~k), InsertDB(~k) ]->
+  [ !DB(~k), !TagSession(~k) ]
+
+rule InitTagSession:
+  [ !TagSession(~kT), Fr(~sidT) ]
+  --[ NewTagSession(~sidT,~kT) ]->
+  [ Tag(~sidT, ~kT) ]
+
+/* READER */
+
+rule R_out:
+  let m1 = ~nR in
+  [ Reader(~sidR), Fr(~nR) ]
+  --[ OutR(~sidR,m1) ]->
+  [ Reader1(~sidR,m1), Out(m1) ]
+
+rule R_in:
+  [ Reader1(~sidR,m1), In(x2) ]
+  --[ InR(~sidR,m1,x2) ]->
+  [ Reader2(~sidR,m1,x2) ]
+
+rule R_test:
+  let x2 = <xnT,h(<m1,xnT,kR>)> in
+  [ !DB(kR), Reader2(~sidR,m1,x2) ]
+  --[ TestR(~sidR), CompleteR(~sidR) ]->
+  [ Out(OK) ]
+
+/* TAG */
+
+rule T_in:
+  [ Tag(~sidT,kT), In(x1) ]
+  --[ PlayT(~sidT,kT), InT(~sidT,kT,x1) ]->
+  [ Tag1(~sidT,kT,x1) ]
+
+rule T_out:
+  let m2 = <~nT,h(<x1,~nT,kT>)> in
+  [ Tag1(~sidT,kT,x1), Fr(~nT) ]
+  --[ PlayT(~sidT,kT), OutT(~sidT,kT,x1,m2), CompleteT(~sidT) ]->
+  [ Out(m2) ]
+
+
+/*************************************
+RESTRICTIONS
+*************************************/
+
+// no interleaving sessions for a given tag
+restriction seqSessionTag:
+  "not (Ex sidT1 sidT2 kT #i1 #i2 #i3.
+    PlayT(sidT1,kT)@i1 &
+    PlayT(sidT2,kT)@i2 &
+    PlayT(sidT1,kT)@i3 &
+    i1<i2 & i2<i3 &
+    not(sidT1=sidT2)
+  )"
+
+/*************************************
+SANITY CHECKS
+*************************************/
+
+lemma readerComplete:
+  exists-trace
+  "Ex sidR #i. CompleteR(sidR)@i"
+
+lemma tagComplete:
+  exists-trace
+  "Ex sidT #i. CompleteT(sidT)@i"
+
+/*************************************
+WELL-AUTHENTICATION
+*************************************/
+
+lemma WA_Reader [use_induction]:
+  "All sidR #i5.
+    TestR(sidR)@i5 ==>
+      ( Ex sidT kT m1 m2 #i1 #i2 #i3 #i4.
+        (
+          InR(sidR,m1,m2)@i4 &
+          OutT(sidT,kT,m1,m2)@i3 &
+          InT(sidT,kT,m1)@i2 &
+          OutR(sidR,m1)@i1 &
+          i1<i2 & i2<i3 & i3<i4 & i4<i5
+        )
+      )
+  "
+
+/*************************************
+NO DESYNCHRONISATION
+*************************************/
+
+lemma ND_Reader [use_induction]:
+  "All sidR sidT kT m1 m2 #i1 #i2 #i3 #i4.
+    ( InR(sidR,m1,m2)@i4 &
+      OutT(sidT,kT,m1,m2)@i3 &
+      InT(sidT,kT,m1)@i2 &
+      OutR(sidR,m1)@i1 &
+      i1<i2 & i2<i3 & i3<i4
+    ) ==> (
+      Ex kR xnT #i0. m2 = <xnT,h(<m1,xnT,kR>)> & InsertDB(kR)@i0 & i0<i4
+    )
+  "
+
+end

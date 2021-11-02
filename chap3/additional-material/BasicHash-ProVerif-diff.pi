@@ -1,0 +1,57 @@
+(* -----------------------------------------------------------------------------
+BASIC HASH
+
+[1] M. Brusó, K. Chatzikokolakis, and J. d Hartog,
+‘Formal Verification of Privacy for RFID Systems’,
+in 2010 23rd IEEE Computer Security Foundations Symposium, 2010, pp. 75–88.
+
+DESCRIPTION OF THE PROTOCOL
+[init.]   kT <-- k, insert k in DB
+[session] T --> R : < nT, h(kT,nT) >
+          R --> T : OK                if there exists kR in DB
+                                        such that snd(x) = h(kR,fst(x))
+
+RESULT
+"Observational equivalence cannot be proved (bad derivable)."
+
+The trace found by ProVerif does not correspond to an attack for our definition
+on unlinkakility (based on trace equivalence).
+----------------------------------------------------------------------------- *)
+
+(* ==THEORY== *)
+
+(* Public communication channel *)
+free cT : channel.
+free cR : channel.
+
+(* Public constants *)
+free OK : bitstring.
+
+(* functions *)
+fun h(bitstring) : bitstring.
+
+reduc forall x:bitstring, y:bitstring;
+  fst((x,y)) = x.
+reduc forall x:bitstring, y:bitstring;
+  snd((x,y)) = y.
+
+(* ==PROTOCOL== *)
+
+table keys(bitstring).
+
+let T (kT:bitstring) =
+  new nT:bitstring;
+  out(cT, (nT, h((kT,nT)))).
+
+let R =
+  in(cR, x:bitstring);
+  get keys(kR) suchthat snd(x) = h((kR,fst(x))) in
+  out(cR, OK).
+
+let BH =
+  (! R) |
+  ! new k:bitstring;
+  ! new kk:bitstring; insert keys(choice[k,kk]);
+    T(choice[k,kk]).
+
+process BH

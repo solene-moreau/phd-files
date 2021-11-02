@@ -1,0 +1,95 @@
+/*************************************
+BASIC HASH
+
+[1] M. Brusó, K. Chatzikokolakis, and J. d Hartog,
+‘Formal Verification of Privacy for RFID Systems’,
+in 2010 23rd IEEE Computer Security Foundations Symposium, 2010, pp. 75–88.
+
+DESCRIPTION OF THE PROTOCOL
+[init.]   kT <-- k, insert k in DB
+[session] T --> R : < nT, h(kT,nT) >
+          R --> T : OK                if there exists kR in DB
+                                         such that snd(x) = h(kR,fst(x))
+
+PROOFS
+- sanity checks
+  * readerComplete            => true (automatic mode)
+  * tagComplete               => true (automatic mode)
+- unlinkability (M_pi = S_pi)
+  * Observational_equivalence => false (automatic mode)
+
+This trace found by Tamarin does not correspond to an attack for our definition
+of unlinkakility (based on trace equivalence).
+*************************************/
+
+theory BasicHash_diff_v2
+begin
+
+functions: h/1, OK/0
+
+/*************************************
+PROTOCOL
+*************************************/
+
+rule InitReader:
+  [ Fr(~sidR) ]
+  --[ NewReaderSession(~sidR) ]->
+  [ Reader(~sidR) ]
+
+rule InitTagIdLeft:
+  [ Fr(~k) ]
+  --[  ]->
+  [ !TagIdLeft(~k) ]
+
+rule InitTagIdLeftRight:
+  [ !TagIdLeft(~k), Fr(~kk) ]
+  --[ InsertDB(diff(~k,~kk)) ]->
+  [ !DB(diff(~k,~kk)), TagIdLeftRight(~k,~kk) ]
+
+rule InitTagSession:
+  [ TagIdLeftRight(~k,~kk), Fr(~sidT) ]
+  --[ NewTagSession(~sidT,diff(~k,~kk)) ]->
+  [ Tag(~sidT,diff(~k,~kk)) ]
+
+/* READER */
+
+rule R_in:
+  [ Reader(~sidR),  In(x) ]
+  --[ InR(~sidR,x) ]->
+  [ Reader1(~sidR,x) ]
+
+rule R_test:
+  let x = <xnT,h(<kR,xnT>)> in
+  [ !DB(kR), Reader1(~sidR,x) ]
+  --[ TestR(~sidR), CompleteR(~sidR) ]->
+  [ Out(OK) ]
+
+/* TAG */
+
+rule T_out:
+  let m = <~nT,h(<kT,~nT>)> in
+  [ Tag(~sidT,kT), Fr(~nT) ]
+  --[ PlayT(~sidT,kT), OutT(~sidT,kT,~nT,m), CompleteT(~sidT) ]->
+  [ Out(m) ]
+
+/*************************************
+RESTRICTIONS
+*************************************/
+
+// No restrictions are necessary to model the sequentiality of a tag
+// because interleaving sessions are not possible for the tag
+// and the state kT is not updated.
+
+/*************************************
+SANITY CHECKS
+*************************************/
+
+lemma readerComplete:
+  exists-trace
+  "Ex sidR #i. CompleteR(sidR)@i"
+
+lemma tagComplete:
+  exists-trace
+  "Ex sidT #i. CompleteT(sidT)@i"
+
+end

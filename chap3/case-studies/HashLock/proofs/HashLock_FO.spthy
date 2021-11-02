@@ -1,0 +1,542 @@
+theory HashLock_FO begin
+
+// Function signature and definition of the equational theory E
+
+functions: OK/0, fst/1, h/1, pair/2, snd/1
+equations: fst(<x.1, x.2>) = x.1, snd(<x.1, x.2>) = x.2
+
+
+
+rule (modulo E) InitReader:
+   [ Fr( ~sidR ) ]
+  --[ NewReaderSession( ~sidR ) ]->
+   [ Reader( ~sidR ) ]
+
+rule (modulo E) InitTagId:
+   [ Fr( ~k ) ]
+  --[ NewId( ~k ), InsertDB( ~k ) ]->
+   [ !DB( ~k ), !TagSession( ~k ) ]
+
+rule (modulo E) InitTagSession:
+   [ !TagSession( ~kT ), Fr( ~sidT ) ]
+  --[ NewTagSession( ~sidT, ~kT ) ]->
+   [ Tag( ~sidT, ~kT ) ]
+
+rule (modulo E) R_out:
+   [ Reader( ~sidR ), Fr( ~nR ) ]
+  --[ OutR( ~sidR, ~nR ) ]->
+   [ Reader1( ~sidR, ~nR ), Out( ~nR ) ]
+
+rule (modulo E) R_in:
+   [ Reader1( ~sidR, m1 ), In( x2 ) ]
+  --[ InR( ~sidR, m1, x2 ) ]->
+   [ Reader2( ~sidR, m1, x2 ) ]
+
+rule (modulo E) R_test:
+   [ !DB( kR ), Reader2( ~sidR, m1, x2 ) ]
+  --[ TestR( ~sidR ), CompleteR( ~sidR ) ]->
+   [ Out( OK ) ]
+
+rule (modulo E) T_in:
+   [ Tag( ~sidT, kT ), In( x1 ) ]
+  --[ PlayT( ~sidT, kT ), InT( ~sidT, kT, x1 ) ]->
+   [ Tag1( ~sidT, kT, x1 ) ]
+
+rule (modulo E) T_out:
+   [ Tag1( ~sidT, kT, x1 ), Fr( ~nT ), Fr( ~nIdeal1 ), Fr( ~nIdeal2 )
+   ]
+  --[
+  PlayT( ~sidT, kT ),
+  OutT( ~sidT, kT, x1,
+        diff(<~nT, h(<x1, ~nT, kT>)>, <~nIdeal1, ~nIdeal2>)
+  ),
+  CompleteT( ~sidT )
+  ]->
+   [ Out( diff(<~nT, h(<x1, ~nT, kT>)>, <~nIdeal1, ~nIdeal2>) ) ]
+
+lemma readerComplete [right]:
+  exists-trace "∃ sidR #i. CompleteR( sidR ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidR #i. (CompleteR( sidR ) @ #i)"
+*/
+simplify
+solve( !DB( kR ) ▶₀ #i )
+  case InitTagId
+  solve( Reader2( ~sidR, m1, x2 ) ▶₁ #i )
+    case R_in
+    SOLVED // trace found
+  qed
+qed
+
+lemma readerComplete [left]:
+  exists-trace "∃ sidR #i. CompleteR( sidR ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidR #i. (CompleteR( sidR ) @ #i)"
+*/
+simplify
+solve( !DB( kR ) ▶₀ #i )
+  case InitTagId
+  solve( Reader2( ~sidR, m1, x2 ) ▶₁ #i )
+    case R_in
+    SOLVED // trace found
+  qed
+qed
+
+lemma tagComplete [right]:
+  exists-trace "∃ sidT #i. CompleteT( sidT ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidT #i. (CompleteT( sidT ) @ #i)"
+*/
+simplify
+solve( Tag1( ~sidT, kT, x1 ) ▶₀ #i )
+  case T_in
+  SOLVED // trace found
+qed
+
+lemma tagComplete [left]:
+  exists-trace "∃ sidT #i. CompleteT( sidT ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidT #i. (CompleteT( sidT ) @ #i)"
+*/
+simplify
+solve( Tag1( ~sidT, kT, x1 ) ▶₀ #i )
+  case T_in
+  SOLVED // trace found
+qed
+
+/* All well-formedness checks were successful. */
+
+diffLemma Observational_equivalence:
+rule-equivalence
+  case Rule_Destrd_0_fst
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( !KD( <x, x.1> ) ▶₀ #i ) )
+      case R_out
+      by step( contradiction /* impossible chain */ )
+    next
+      case R_test
+      by step( contradiction /* impossible chain */ )
+    next
+      case T_out
+      step( solve( (#vl, 0) ~~> (#i, 0) ) )
+        case d_0_fst
+        by step( contradiction /* impossible chain */ )
+      next
+        case d_0_snd
+        by step( solve( (#vr.1, 0) ~~> (#i, 0) ) )
+      next
+        case pair
+        step( solve( Tag1( ~sidT, kT, x1 ) ▶₀ #vr ) )
+          case T_in
+          MIRRORED
+        qed
+      qed
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( !KD( <x, x.1> ) ▶₀ #i ) )
+      case R_out
+      by step( contradiction /* impossible chain */ )
+    next
+      case R_test
+      by step( contradiction /* impossible chain */ )
+    next
+      case T_out
+      step( solve( (#vl, 0) ~~> (#i, 0) ) )
+        case d_0_fst
+        by step( contradiction /* impossible chain */ )
+      next
+        case d_0_snd
+        by step( contradiction /* impossible chain */ )
+      next
+        case pair
+        step( solve( Tag1( ~sidT, kT, x1 ) ▶₀ #vr ) )
+          case T_in
+          MIRRORED
+        qed
+      qed
+    qed
+  qed
+next
+  case Rule_Destrd_0_snd
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( !KD( <x, x.1> ) ▶₀ #i ) )
+      case R_out
+      by step( contradiction /* impossible chain */ )
+    next
+      case R_test
+      by step( contradiction /* impossible chain */ )
+    next
+      case T_out
+      step( solve( (#vl, 0) ~~> (#i, 0) ) )
+        case d_0_fst
+        by step( contradiction /* impossible chain */ )
+      next
+        case d_0_snd
+        by step( solve( (#vr.1, 0) ~~> (#i, 0) ) )
+      next
+        case pair
+        step( solve( Tag1( ~sidT, kT, x1 ) ▶₀ #vr ) )
+          case T_in
+          MIRRORED
+        qed
+      qed
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( !KD( <x, x.1> ) ▶₀ #i ) )
+      case R_out
+      by step( contradiction /* impossible chain */ )
+    next
+      case R_test
+      by step( contradiction /* impossible chain */ )
+    next
+      case T_out
+      step( solve( (#vl, 0) ~~> (#i, 0) ) )
+        case d_0_fst
+        by step( contradiction /* impossible chain */ )
+      next
+        case d_0_snd
+        by step( contradiction /* impossible chain */ )
+      next
+        case pair
+        step( solve( Tag1( ~sidT, kT, x1 ) ▶₀ #vr ) )
+          case T_in
+          MIRRORED
+        qed
+      qed
+    qed
+  qed
+next
+  case Rule_Equality
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( !KD( x ) ▶₁ #i ) )
+      case R_out
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case Var_fresh_nR
+        step( solve( Reader( ~sidR ) ▶₀ #vr ) )
+          case InitReader
+          step( solve( !KU( ~nR ) @ #vk ) )
+            case R_out
+            MIRRORED
+          qed
+        qed
+      qed
+    next
+      case R_test
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case OK
+        step( solve( !DB( kR ) ▶₀ #vr ) )
+          case InitTagId
+          step( solve( Reader2( ~sidR, m1, x2 ) ▶₁ #vr ) )
+            case R_in
+            step( solve( !KU( OK ) @ #vk ) )
+              case c_OK
+              MIRRORED
+            next
+              case coerce
+              step( solve( !KD( OK ) ▶₀ #vk ) )
+                case R_out
+                by step( contradiction /* impossible chain */ )
+              next
+                case R_test
+                by step( contradiction /* impossible chain */ )
+              next
+                case T_out
+                step( solve( (#vl.1, 0) ~~> (#vk, 0) ) )
+                  case d_0_fst
+                  by step( contradiction /* impossible chain */ )
+                next
+                  case d_0_snd
+                  by step( solve( (#vr.6, 0) ~~> (#vk, 0) ) )
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    next
+      case T_out
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case d_0_fst
+        step( solve( (#vr.1, 0) ~~> (#i, 1) ) )
+          case Var_fresh_nT
+          step( solve( Tag1( ~sidT, kT, x1 ) ▶₀ #vr ) )
+            case T_in
+            step( solve( !KU( ~nT ) @ #vk ) )
+              case T_out
+              MIRRORED
+            qed
+          qed
+        qed
+      next
+        case d_0_snd
+        step( solve( (#vr.1, 0) ~~> (#i, 1) ) )
+          case h
+          step( solve( Tag1( ~sidT, kT, x1 ) ▶₀ #vr ) )
+            case T_in
+            step( solve( !KU( h(<x1, ~nT, ~kT>) ) @ #vk ) )
+              case T_out
+              MIRRORED
+            next
+              case c_h
+              by step( solve( !KU( ~kT ) @ #vk.5 ) )
+            qed
+          qed
+        qed
+      next
+        case pair
+        step( solve( Tag1( ~sidT, kT, x1 ) ▶₀ #vr ) )
+          case T_in
+          step( solve( !KU( ~nT ) @ #vk.1 ) )
+            case T_out
+            step( solve( !KU( h(<x1, ~nT, ~kT>) ) @ #vk.2 ) )
+              case T_out
+              MIRRORED
+            next
+              case c_h
+              by step( solve( !KU( ~kT ) @ #vk.6 ) )
+            qed
+          qed
+        qed
+      qed
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( !KD( x ) ▶₁ #i ) )
+      case R_out
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case Var_fresh_nR
+        step( solve( Reader( ~sidR ) ▶₀ #vr ) )
+          case InitReader
+          step( solve( !KU( ~nR ) @ #vk ) )
+            case R_out
+            MIRRORED
+          qed
+        qed
+      qed
+    next
+      case R_test
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case OK
+        step( solve( !DB( kR ) ▶₀ #vr ) )
+          case InitTagId
+          step( solve( Reader2( ~sidR, m1, x2 ) ▶₁ #vr ) )
+            case R_in
+            step( solve( !KU( OK ) @ #vk ) )
+              case c_OK
+              MIRRORED
+            next
+              case coerce
+              step( solve( !KD( OK ) ▶₀ #vk ) )
+                case R_out
+                by step( contradiction /* impossible chain */ )
+              next
+                case R_test
+                by step( contradiction /* impossible chain */ )
+              next
+                case T_out
+                by step( contradiction /* impossible chain */ )
+              qed
+            qed
+          qed
+        qed
+      qed
+    next
+      case T_out
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case d_0_fst
+        step( solve( (#vr.1, 0) ~~> (#i, 1) ) )
+          case Var_fresh_nIdeal1
+          step( solve( Tag1( ~sidT, kT, x1 ) ▶₀ #vr ) )
+            case T_in
+            step( solve( !KU( ~nIdeal1 ) @ #vk ) )
+              case T_out
+              MIRRORED
+            qed
+          qed
+        qed
+      next
+        case d_0_snd
+        step( solve( (#vr.1, 0) ~~> (#i, 1) ) )
+          case Var_fresh_nIdeal2
+          step( solve( Tag1( ~sidT, kT, x1 ) ▶₀ #vr ) )
+            case T_in
+            step( solve( !KU( ~nIdeal2 ) @ #vk ) )
+              case T_out
+              MIRRORED
+            qed
+          qed
+        qed
+      next
+        case pair
+        step( solve( Tag1( ~sidT, kT, x1 ) ▶₀ #vr ) )
+          case T_in
+          step( solve( !KU( ~nIdeal1 ) @ #vk.1 ) )
+            case T_out
+            step( solve( !KU( ~nIdeal2 ) @ #vk.2 ) )
+              case T_out
+              MIRRORED
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+next
+  case Rule_InitReader
+  backward-search
+    case LHS
+    step( simplify )
+    MIRRORED
+  next
+    case RHS
+    step( simplify )
+    MIRRORED
+  qed
+next
+  case Rule_InitTagId
+  backward-search
+    case LHS
+    step( simplify )
+    MIRRORED
+  next
+    case RHS
+    step( simplify )
+    MIRRORED
+  qed
+next
+  case Rule_InitTagSession
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( !TagSession( ~kT ) ▶₀ #i ) )
+      case InitTagId
+      MIRRORED
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( !TagSession( ~kT ) ▶₀ #i ) )
+      case InitTagId
+      MIRRORED
+    qed
+  qed
+next
+  case Rule_R_in
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( Reader1( ~sidR, m1 ) ▶₀ #i ) )
+      case R_out
+      MIRRORED
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( Reader1( ~sidR, m1 ) ▶₀ #i ) )
+      case R_out
+      MIRRORED
+    qed
+  qed
+next
+  case Rule_R_out
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( Reader( ~sidR ) ▶₀ #i ) )
+      case InitReader
+      MIRRORED
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( Reader( ~sidR ) ▶₀ #i ) )
+      case InitReader
+      MIRRORED
+    qed
+  qed
+next
+  case Rule_R_test
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( !DB( kR ) ▶₀ #i ) )
+      case InitTagId
+      step( solve( Reader2( ~sidR, m1, x2 ) ▶₁ #i ) )
+        case R_in
+        MIRRORED
+      qed
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( !DB( kR ) ▶₀ #i ) )
+      case InitTagId
+      step( solve( Reader2( ~sidR, m1, x2 ) ▶₁ #i ) )
+        case R_in
+        MIRRORED
+      qed
+    qed
+  qed
+next
+  case Rule_Send
+  backward-search
+    case LHS
+    step( simplify )
+    MIRRORED
+  next
+    case RHS
+    step( simplify )
+    MIRRORED
+  qed
+next
+  case Rule_T_in
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( Tag( ~sidT, kT ) ▶₀ #i ) )
+      case InitTagSession
+      MIRRORED
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( Tag( ~sidT, kT ) ▶₀ #i ) )
+      case InitTagSession
+      MIRRORED
+    qed
+  qed
+next
+  case Rule_T_out
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( Tag1( ~sidT, kT, x1 ) ▶₀ #i ) )
+      case T_in
+      MIRRORED
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( Tag1( ~sidT, kT, x1 ) ▶₀ #i ) )
+      case T_in
+      MIRRORED
+    qed
+  qed
+qed
+
+end

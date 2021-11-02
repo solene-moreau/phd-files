@@ -1,0 +1,244 @@
+theory HashLock_WA_ND begin
+
+// Function signature and definition of the equational theory E
+
+functions: OK/0, fst/1, h/1, pair/2, snd/1
+equations: fst(<x.1, x.2>) = x.1, snd(<x.1, x.2>) = x.2
+
+
+
+rule (modulo E) InitReader:
+   [ Fr( ~sidR ) ]
+  --[ NewReaderSession( ~sidR ) ]->
+   [ Reader( ~sidR ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) InitTagId:
+   [ Fr( ~k ) ]
+  --[ NewId( ~k ), InsertDB( ~k ) ]->
+   [ !DB( ~k ), !TagSession( ~k ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) InitTagSession:
+   [ !TagSession( ~kT ), Fr( ~sidT ) ]
+  --[ NewTagSession( ~sidT, ~kT ) ]->
+   [ Tag( ~sidT, ~kT ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) R_out:
+   [ Reader( ~sidR ), Fr( ~nR ) ]
+  --[ OutR( ~sidR, ~nR ) ]->
+   [ Reader1( ~sidR, ~nR ), Out( ~nR ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) R_in:
+   [ Reader1( ~sidR, m1 ), In( x2 ) ]
+  --[ InR( ~sidR, m1, x2 ) ]->
+   [ Reader2( ~sidR, m1, x2 ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) R_test:
+   [ !DB( kR ), Reader2( ~sidR, m1, <xnT, h(<m1, xnT, kR>)> ) ]
+  --[ TestR( ~sidR ), CompleteR( ~sidR ) ]->
+   [ Out( OK ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) T_in:
+   [ Tag( ~sidT, kT ), In( x1 ) ]
+  --[ PlayT( ~sidT, kT ), InT( ~sidT, kT, x1 ) ]->
+   [ Tag1( ~sidT, kT, x1 ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) T_out:
+   [ Tag1( ~sidT, kT, x1 ), Fr( ~nT ) ]
+  --[
+  PlayT( ~sidT, kT ), OutT( ~sidT, kT, x1, <~nT, h(<x1, ~nT, kT>)> ),
+  CompleteT( ~sidT )
+  ]->
+   [ Out( <~nT, h(<x1, ~nT, kT>)> ) ]
+
+  /* has exactly the trivial AC variant */
+
+restriction seqSessionTag:
+  "¬(∃ sidT1 sidT2 kT #i1 #i2 #i3.
+      (((((PlayT( sidT1, kT ) @ #i1) ∧ (PlayT( sidT2, kT ) @ #i2)) ∧
+         (PlayT( sidT1, kT ) @ #i3)) ∧
+        (#i1 < #i2)) ∧
+       (#i2 < #i3)) ∧
+      (¬(sidT1 = sidT2)))"
+  // safety formula
+
+lemma readerComplete:
+  exists-trace "∃ sidR #i. CompleteR( sidR ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidR #i. (CompleteR( sidR ) @ #i)"
+*/
+simplify
+solve( !DB( kR ) ▶₀ #i )
+  case InitTagId
+  solve( Reader2( ~sidR, m1, <xnT, h(<m1, xnT, ~k>)> ) ▶₁ #i )
+    case R_in
+    solve( !KU( h(<~nR, xnT, ~k>) ) @ #vk.2 )
+      case T_out
+      solve( !KU( ~nR ) @ #vk.3 )
+        case R_out
+        solve( !KU( ~nT ) @ #vk.3 )
+          case T_out
+          SOLVED // trace found
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma tagComplete:
+  exists-trace "∃ sidT #i. CompleteT( sidT ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidT #i. (CompleteT( sidT ) @ #i)"
+*/
+simplify
+solve( Tag1( ~sidT, kT, x1 ) ▶₀ #i )
+  case T_in
+  SOLVED // trace found
+qed
+
+lemma WA_Reader [use_induction]:
+  all-traces
+  "∀ sidR #i5.
+    (TestR( sidR ) @ #i5) ⇒
+    (∃ sidT kT m1 m2 #i1 #i2 #i3 #i4.
+      (((((((InR( sidR, m1, m2 ) @ #i4) ∧
+            (OutT( sidT, kT, m1, m2 ) @ #i3)) ∧
+           (InT( sidT, kT, m1 ) @ #i2)) ∧
+          (OutR( sidR, m1 ) @ #i1)) ∧
+         (#i1 < #i2)) ∧
+        (#i2 < #i3)) ∧
+       (#i3 < #i4)) ∧
+      (#i4 < #i5))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidR #i5.
+  (TestR( sidR ) @ #i5)
+ ∧
+  ∀ sidT kT m1 m2 #i1 #i2 #i3 #i4.
+   (InR( sidR, m1, m2 ) @ #i4) ∧
+   (OutT( sidT, kT, m1, m2 ) @ #i3) ∧
+   (InT( sidT, kT, m1 ) @ #i2) ∧
+   (OutR( sidR, m1 ) @ #i1)
+  ⇒
+   ((¬(#i1 < #i2)) ∨
+    (¬(#i2 < #i3)) ∨
+    (¬(#i3 < #i4)) ∨
+    (¬(#i4 < #i5)))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i5))  ∥
+         (∃ sidT kT m1 m2 #i1 #i2 #i3 #i4.
+           (InR( ~sidR, m1, m2 ) @ #i4) ∧
+           (OutT( sidT, kT, m1, m2 ) @ #i3) ∧
+           (InT( sidT, kT, m1 ) @ #i2) ∧
+           (OutR( ~sidR, m1 ) @ #i1)
+          ∧
+           (¬(last(#i4))) ∧
+           (¬(last(#i3))) ∧
+           (¬(last(#i2))) ∧
+           (¬(last(#i1))) ∧
+           (#i1 < #i2) ∧
+           (#i2 < #i3) ∧
+           (#i3 < #i4) ∧
+           (#i4 < #i5)) )
+    case case_1
+    solve( !DB( kR ) ▶₀ #i5 )
+      case InitTagId
+      solve( Reader2( ~sidR, m1, <xnT, h(<m1, xnT, ~k>)> ) ▶₁ #i5 )
+        case R_in
+        solve( !KU( h(<~nR, xnT, ~k>) ) @ #vk.2 )
+          case T_out
+          solve( !KU( ~nR ) @ #vk.3 )
+            case R_out
+            by contradiction /* cyclic */
+          qed
+        next
+          case c_h
+          by solve( !KU( ~k ) @ #vk.6 )
+        qed
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma ND_Reader [use_induction]:
+  all-traces
+  "∀ sidR sidT kT m1 m2 #i1 #i2 #i3 #i4.
+    (((((((InR( sidR, m1, m2 ) @ #i4) ∧
+          (OutT( sidT, kT, m1, m2 ) @ #i3)) ∧
+         (InT( sidT, kT, m1 ) @ #i2)) ∧
+        (OutR( sidR, m1 ) @ #i1)) ∧
+       (#i1 < #i2)) ∧
+      (#i2 < #i3)) ∧
+     (#i3 < #i4)) ⇒
+    (∃ kR xnT #i0.
+      ((m2 = <xnT, h(<m1, xnT, kR>)>) ∧ (InsertDB( kR ) @ #i0)) ∧
+      (#i0 < #i4))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidR sidT kT m1 m2 #i1 #i2 #i3 #i4.
+  (InR( sidR, m1, m2 ) @ #i4) ∧
+  (OutT( sidT, kT, m1, m2 ) @ #i3) ∧
+  (InT( sidT, kT, m1 ) @ #i2) ∧
+  (OutR( sidR, m1 ) @ #i1)
+ ∧
+  (#i1 < #i2) ∧
+  (#i2 < #i3) ∧
+  (#i3 < #i4) ∧
+  (∀ kR xnT #i0.
+    (m2 = <xnT, h(<m1, xnT, kR>)>) ∧ (InsertDB( kR ) @ #i0)
+   ⇒
+    ¬(#i0 < #i4))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i4))  ∥
+         (∃ kR xnT #i0.
+           (<~nT, h(<~nR, ~nT, kT>)> = <xnT, h(<~nR, xnT, kR>)>) ∧
+           (InsertDB( kR ) @ #i0)
+          ∧
+           (¬(last(#i0))) ∧ (#i0 < #i4)) )
+    case case_1
+    solve( Reader( ~sidR ) ▶₀ #i1 )
+      case InitReader
+      solve( Tag( ~sidT, kT ) ▶₀ #i2 )
+        case InitTagSession
+        by contradiction /* from formulas */
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+/* All well-formedness checks were successful. */
+
+end

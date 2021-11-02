@@ -1,0 +1,2614 @@
+theory AKA_simplified_FO begin
+
+// Function signature and definition of the equational theory E
+
+functions: ERROR/0, OK/0, adec/2, aenc/2, extractMS/3 [private],
+           extractN/4 [private], f1/2, f2/2, fst/1, pair/2, pk/1, snd/1
+equations:
+    adec(aenc(x.1, pk(x.2)), x.2) = x.1,
+    extractMS(<RAND, f1(kIMSI, <RAND, n2>)>, kIMSI, n2) = RAND,
+    extractN(aenc(<kIMSI, n1, n2>, pk(skN)), kIMSI, n1, skN) = n2,
+    fst(<x.1, x.2>) = x.1,
+    snd(<x.1, x.2>) = x.2
+
+
+
+rule (modulo E) InitNetwork:
+   [ Fr( ~skN ) ]
+  --[ Once( 'initNetwork' ), NewNetworkPrivateKey( ~skN ) ]->
+   [ !NewNetwork( ~skN ), !Pk( pk(~skN) ), Out( pk(~skN) ) ]
+
+rule (modulo E) InitNetworkSession:
+   [ Fr( ~sidN ), !NewNetwork( ~skN ) ]
+  --[ NewNetworkSession( ~sidN ) ]->
+   [ Network( ~sidN, ~skN ) ]
+
+rule (modulo E) InitMobileStationId:
+   [ Fr( ~kIMSI ), Fr( ~IMSI ) ]
+  --[ InsertDB( ~kIMSI, ~IMSI ) ]->
+   [
+   !DB( ~kIMSI, ~IMSI ), !MobileStationState( ~kIMSI, ~IMSI ),
+   Out( ~IMSI )
+   ]
+
+rule (modulo E) InitMobileStationSession:
+   [ !MobileStationState( ~kIMSI, ~IMSI ), Fr( ~sidMS ) ]
+  --[ NewMobileStationSession( ~sidMS, ~kIMSI, ~IMSI ) ]->
+   [ MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ]
+
+rule (modulo E) N_out_1:
+   [ Network( ~sidN, ~skN ), Fr( ~n1 ) ]
+  --[ OutN1( ~sidN, ~skN, ~n1 ) ]->
+   [ Network1( ~sidN, ~skN, ~n1 ), Out( ~n1 ) ]
+
+rule (modulo E) N_in_1:
+   [ Network1( ~sidN, ~skN, ~n1 ), In( xID ) ]
+  --[ InN1( ~sidN, ~skN, ~n1, xID ) ]->
+   [ Network2( ~sidN, ~skN, ~n1, xID ) ]
+
+rule (modulo E) N_test_1:
+   [ !DB( ~kIMSI, ~IMSI ), Network2( ~sidN, ~skN, ~n1, xID ) ]
+  --[ LookupDB( ~kIMSI, ~IMSI ), TestN1( ~sidN, ~skN ) ]->
+   [
+   Network3( ~sidN, ~skN, ~n1, xID, extractN(xID, ~kIMSI, ~n1, ~skN),
+             ~kIMSI, ~IMSI
+   )
+   ]
+
+rule (modulo E) N_out_2:
+   [
+   Network3( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI ), Fr( ~RAND ),
+   Fr( ~nIdealRAND ), Fr( ~nIdealf1 )
+   ]
+  --[
+  OutN2( ~sidN, ~skN, ~n1, xID,
+         diff(<~RAND, f1(~kIMSI, <~RAND, xn2>)>, <~nIdealRAND, ~nIdealf1>)
+  )
+  ]->
+   [
+   Network4( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI, ~RAND,
+             diff(<~RAND, f1(~kIMSI, <~RAND, xn2>)>, <~nIdealRAND, ~nIdealf1>)
+   ),
+   Out( diff(<~RAND, f1(~kIMSI, <~RAND, xn2>)>, <~nIdealRAND, 
+                                                 ~nIdealf1>)
+   )
+   ]
+
+rule (modulo E) N_in_2:
+   [
+   Network4( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI, ~RAND, mReq ),
+   In( xRes )
+   ]
+  --[ InN2( ~sidN, ~skN, ~n1, xID, mReq, xRes ) ]->
+   [
+   Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI, ~RAND, mReq,
+             xRes
+   )
+   ]
+
+rule (modulo E) N_test_2_Then:
+   [
+   Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI, ~RAND, mReq,
+             xRes
+   )
+   ]
+  --[ TestN2_Then( ~sidN, ~skN ), CompleteN( ~sidN ) ]->
+   [ Out( OK ) ]
+
+rule (modulo E) N_test_Else:
+   [
+   Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI, ~RAND, mReq,
+             xRes
+   )
+   ]
+  --[ TestN2_Else( ~sidN, ~skN ) ]->
+   [ Out( ERROR ) ]
+
+rule (modulo E) MS_in_1:
+   [ MobileStation( ~sidMS, ~kIMSI, ~IMSI ), In( xn1 ) ]
+  --[ PlayMS( ~sidMS, ~kIMSI ), InMS1( ~sidMS, ~kIMSI, ~IMSI, xn1 )
+  ]->
+   [ MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1 ) ]
+
+rule (modulo E) MS_out_1:
+   [
+   !Pk( pkN ), MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1 ),
+   Fr( ~n2 ), Fr( ~nIdealaenc )
+   ]
+  --[
+  PlayMS( ~sidMS, ~kIMSI ),
+  OutMS1( ~sidMS, ~kIMSI, ~IMSI, ~n2, xn1,
+          diff(aenc(<~kIMSI, xn1, ~n2>, pkN), ~nIdealaenc)
+  )
+  ]->
+   [
+   MobileStation2( ~sidMS, ~kIMSI, ~IMSI, xn1,
+                   diff(aenc(<~kIMSI, xn1, ~n2>, pkN), ~nIdealaenc), ~n2
+   ),
+   Out( diff(aenc(<~kIMSI, xn1, ~n2>, pkN), ~nIdealaenc) )
+   ]
+
+rule (modulo E) MS_in_2:
+   [
+   MobileStation2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2 ), In( xReq )
+   ]
+  --[
+  PlayMS( ~sidMS, ~kIMSI ),
+  InMS2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, xReq )
+  ]->
+   [ MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq ) ]
+
+rule (modulo E) MS_test_Then:
+   [ MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq ) ]
+  --[ PlayMS( ~sidMS, ~kIMSI ), TestMS_Then( ~sidMS ) ]->
+   [
+   MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq,
+                   extractMS(xReq, ~kIMSI, ~n2)
+   )
+   ]
+
+rule (modulo E) MS_test_Else:
+   [ MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq ) ]
+  --[ PlayMS( ~sidMS, ~kIMSI ), TestMS_Else( ~sidMS ) ]->
+   [ Out( ERROR ) ]
+
+rule (modulo E) MS_out_2:
+   [
+   MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq, xRAND
+   ),
+   Fr( ~nIdealf2 )
+   ]
+  --[
+  PlayMS( ~sidMS, ~kIMSI ),
+  OutMS2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, xReq,
+          diff(f2(~kIMSI, xRAND), ~nIdealf2)
+  ),
+  CompleteMS( ~sidMS )
+  ]->
+   [ Out( diff(f2(~kIMSI, xRAND), ~nIdealf2) ) ]
+
+restriction once [right]:
+  "∀ x #i #j. ((Once( x ) @ #i) ∧ (Once( x ) @ #j)) ⇒ (#i = #j)"
+  // safety formula
+
+restriction once [left]:
+  "∀ x #i #j. ((Once( x ) @ #i) ∧ (Once( x ) @ #j)) ⇒ (#i = #j)"
+  // safety formula
+
+lemma mobileStationComplete [right]:
+  exists-trace "∃ sidMS #i. CompleteMS( sidMS ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidMS #i. (CompleteMS( sidMS ) @ #i)"
+*/
+simplify
+solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq,
+                       xRAND
+       ) ▶₀ #i )
+  case MS_test_Then
+  solve( splitEqs(1) )
+    case split_case_2
+    SOLVED // trace found
+  qed
+qed
+
+lemma mobileStationComplete [left]:
+  exists-trace "∃ sidMS #i. CompleteMS( sidMS ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidMS #i. (CompleteMS( sidMS ) @ #i)"
+*/
+simplify
+solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq,
+                       xRAND
+       ) ▶₀ #i )
+  case MS_test_Then
+  solve( splitEqs(1) )
+    case split_case_2
+    SOLVED // trace found
+  qed
+qed
+
+lemma networkComplete [right]:
+  exists-trace "∃ sidN #i. CompleteN( sidN ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidN #i. (CompleteN( sidN ) @ #i)"
+*/
+simplify
+solve( Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI, ~RAND,
+                 mReq, xRes
+       ) ▶₀ #i )
+  case N_in_2
+  solve( splitEqs(1) )
+    case split_case_1
+    SOLVED // trace found
+  qed
+qed
+
+lemma networkComplete [left]:
+  exists-trace "∃ sidN #i. CompleteN( sidN ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidN #i. (CompleteN( sidN ) @ #i)"
+*/
+simplify
+solve( Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI, ~RAND,
+                 mReq, xRes
+       ) ▶₀ #i )
+  case N_in_2
+  solve( splitEqs(1) )
+    case split_case_1
+    SOLVED // trace found
+  qed
+qed
+
+lemma initMobileStationId [right, use_induction, reuse]:
+  all-traces
+  "∀ sidMS kIMSI #i.
+    (PlayMS( sidMS, kIMSI ) @ #i) ⇒
+    (∃ IMSI #j. (InsertDB( kIMSI, IMSI ) @ #j) ∧ (#j < #i))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidMS kIMSI #i.
+  (PlayMS( sidMS, kIMSI ) @ #i)
+ ∧
+  ∀ IMSI #j. (InsertDB( kIMSI, IMSI ) @ #j) ⇒ ¬(#j < #i)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥
+         (∃ IMSI #j.
+           (InsertDB( kIMSI, IMSI ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i)) )
+    case case_1
+    solve( PlayMS( sidMS, kIMSI ) @ #i )
+      case MS_in_1
+      solve( MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ▶₀ #i )
+        case InitMobileStationSession
+        by contradiction /* from formulas */
+      qed
+    next
+      case MS_in_2
+      solve( MobileStation2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2
+             ) ▶₀ #i )
+        case MS_out_1
+        by contradiction /* from formulas */
+      qed
+    next
+      case MS_out_1
+      solve( !Pk( pkN ) ▶₀ #i )
+        case InitNetwork
+        solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1 ) ▶₁ #i )
+          case MS_in_1
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case MS_out_2
+      solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq,
+                             xRAND
+             ) ▶₀ #i )
+        case MS_test_Then
+        by contradiction /* from formulas */
+      qed
+    next
+      case MS_test_Else
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq
+             ) ▶₀ #i )
+        case MS_in_2
+        by contradiction /* from formulas */
+      qed
+    next
+      case MS_test_Then
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq
+             ) ▶₀ #i )
+        case MS_in_2
+        by contradiction /* from formulas */
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma initMobileStationId [left, use_induction, reuse]:
+  all-traces
+  "∀ sidMS kIMSI #i.
+    (PlayMS( sidMS, kIMSI ) @ #i) ⇒
+    (∃ IMSI #j. (InsertDB( kIMSI, IMSI ) @ #j) ∧ (#j < #i))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidMS kIMSI #i.
+  (PlayMS( sidMS, kIMSI ) @ #i)
+ ∧
+  ∀ IMSI #j. (InsertDB( kIMSI, IMSI ) @ #j) ⇒ ¬(#j < #i)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥
+         (∃ IMSI #j.
+           (InsertDB( kIMSI, IMSI ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i)) )
+    case case_1
+    solve( PlayMS( sidMS, kIMSI ) @ #i )
+      case MS_in_1
+      solve( MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ▶₀ #i )
+        case InitMobileStationSession
+        by contradiction /* from formulas */
+      qed
+    next
+      case MS_in_2
+      solve( MobileStation2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2
+             ) ▶₀ #i )
+        case MS_out_1
+        by contradiction /* from formulas */
+      qed
+    next
+      case MS_out_1
+      solve( !Pk( pkN ) ▶₀ #i )
+        case InitNetwork
+        solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1 ) ▶₁ #i )
+          case MS_in_1
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case MS_out_2
+      solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq,
+                             xRAND
+             ) ▶₀ #i )
+        case MS_test_Then
+        by contradiction /* from formulas */
+      qed
+    next
+      case MS_test_Else
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq
+             ) ▶₀ #i )
+        case MS_in_2
+        by contradiction /* from formulas */
+      qed
+    next
+      case MS_test_Then
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq
+             ) ▶₀ #i )
+        case MS_in_2
+        by contradiction /* from formulas */
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma initDB [right, use_induction, reuse]:
+  all-traces
+  "∀ kIMSI IMSI #i.
+    (LookupDB( kIMSI, IMSI ) @ #i) ⇒
+    (∃ #j. (InsertDB( kIMSI, IMSI ) @ #j) ∧ (#j < #i))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ kIMSI IMSI #i.
+  (LookupDB( kIMSI, IMSI ) @ #i)
+ ∧
+  ∀ #j. (InsertDB( kIMSI, IMSI ) @ #j) ⇒ ¬(#j < #i)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥
+         (∃ #j.
+           (InsertDB( ~kIMSI, ~IMSI ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i)) )
+    case case_1
+    solve( !DB( ~kIMSI, ~IMSI ) ▶₀ #i )
+      case InitMobileStationId
+      by contradiction /* from formulas */
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma initDB [left, use_induction, reuse]:
+  all-traces
+  "∀ kIMSI IMSI #i.
+    (LookupDB( kIMSI, IMSI ) @ #i) ⇒
+    (∃ #j. (InsertDB( kIMSI, IMSI ) @ #j) ∧ (#j < #i))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ kIMSI IMSI #i.
+  (LookupDB( kIMSI, IMSI ) @ #i)
+ ∧
+  ∀ #j. (InsertDB( kIMSI, IMSI ) @ #j) ⇒ ¬(#j < #i)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥
+         (∃ #j.
+           (InsertDB( ~kIMSI, ~IMSI ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i)) )
+    case case_1
+    solve( !DB( ~kIMSI, ~IMSI ) ▶₀ #i )
+      case InitMobileStationId
+      by contradiction /* from formulas */
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma secrecyKeyDB [right, use_induction, reuse]:
+  all-traces
+  "∀ kIMSI IMSI #i.
+    (LookupDB( kIMSI, IMSI ) @ #i) ⇒ (¬(∃ #j. !KU( kIMSI ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ kIMSI IMSI #i.
+  (LookupDB( kIMSI, IMSI ) @ #i) ∧ ∃ #j. (!KU( kIMSI ) @ #j)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥ (∀ #j. (!KU( ~kIMSI ) @ #j) ⇒ last(#j)) )
+    case case_1
+    solve( !DB( ~kIMSI, ~IMSI ) ▶₀ #i )
+      case InitMobileStationId
+      solve( Network2( ~sidN, ~skN, ~n1, xID ) ▶₁ #i )
+        case N_in_1
+        by solve( !KU( ~kIMSI ) @ #j.1 )
+      qed
+    qed
+  next
+    case case_2
+    solve( !DB( ~kIMSI, ~IMSI ) ▶₀ #i )
+      case InitMobileStationId
+      solve( Network2( ~sidN, ~skN, ~n1, xID ) ▶₁ #i )
+        case N_in_1
+        by solve( !KU( ~kIMSI ) @ #j.1 )
+      qed
+    qed
+  qed
+qed
+
+lemma secrecyKeyDB [left, use_induction, reuse]:
+  all-traces
+  "∀ kIMSI IMSI #i.
+    (LookupDB( kIMSI, IMSI ) @ #i) ⇒ (¬(∃ #j. !KU( kIMSI ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ kIMSI IMSI #i.
+  (LookupDB( kIMSI, IMSI ) @ #i) ∧ ∃ #j. (!KU( kIMSI ) @ #j)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥ (∀ #j. (!KU( ~kIMSI ) @ #j) ⇒ last(#j)) )
+    case case_1
+    solve( !DB( ~kIMSI, ~IMSI ) ▶₀ #i )
+      case InitMobileStationId
+      solve( Network2( ~sidN, ~skN, ~n1, xID ) ▶₁ #i )
+        case N_in_1
+        solve( !KU( ~kIMSI ) @ #j.1 )
+          case MS_out_1
+          by solve( !KU( ~skN ) @ #vk.1 )
+        qed
+      qed
+    qed
+  next
+    case case_2
+    solve( !DB( ~kIMSI, ~IMSI ) ▶₀ #i )
+      case InitMobileStationId
+      solve( Network2( ~sidN, ~skN, ~n1, xID ) ▶₁ #i )
+        case N_in_1
+        solve( !KU( ~kIMSI ) @ #j.1 )
+          case MS_out_1
+          by solve( !KU( ~skN ) @ #vk.1 )
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma secrecyKeyTag [right, use_induction, reuse]:
+  all-traces
+  "∀ sidMS kIMSI #i.
+    (PlayMS( sidMS, kIMSI ) @ #i) ⇒ (¬(∃ #j. !KU( kIMSI ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidMS kIMSI #i.
+  (PlayMS( sidMS, kIMSI ) @ #i) ∧ ∃ #j. (!KU( kIMSI ) @ #j)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥ (∀ #j. (!KU( ~kIMSI ) @ #j) ⇒ last(#j)) )
+    case case_1
+    solve( PlayMS( sidMS, ~kIMSI ) @ #i )
+      case MS_in_1
+      solve( MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ▶₀ #i )
+        case InitMobileStationSession
+        by solve( !KU( ~kIMSI ) @ #j.1 )
+      qed
+    next
+      case MS_in_2
+      solve( MobileStation2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2
+             ) ▶₀ #i )
+        case MS_out_1
+        by solve( !KU( ~kIMSI ) @ #i )
+      qed
+    next
+      case MS_out_1
+      solve( !Pk( pkN ) ▶₀ #i )
+        case InitNetwork
+        solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1 ) ▶₁ #i )
+          case MS_in_1
+          by solve( !KU( ~kIMSI ) @ #i )
+        qed
+      qed
+    next
+      case MS_out_2
+      solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq,
+                             xRAND
+             ) ▶₀ #i )
+        case MS_test_Then
+        by solve( !KU( ~kIMSI ) @ #i )
+      qed
+    next
+      case MS_test_Else
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq
+             ) ▶₀ #i )
+        case MS_in_2
+        by solve( !KU( ~kIMSI ) @ #i )
+      qed
+    next
+      case MS_test_Then
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq
+             ) ▶₀ #i )
+        case MS_in_2
+        by solve( !KU( ~kIMSI ) @ #i )
+      qed
+    qed
+  next
+    case case_2
+    solve( PlayMS( sidMS, ~kIMSI ) @ #i )
+      case MS_in_1
+      solve( MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ▶₀ #i )
+        case InitMobileStationSession
+        by solve( !KU( ~kIMSI ) @ #j.1 )
+      qed
+    next
+      case MS_in_2
+      solve( MobileStation2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2
+             ) ▶₀ #i )
+        case MS_out_1
+        by solve( !KU( ~kIMSI ) @ #j.1 )
+      qed
+    next
+      case MS_out_1
+      solve( !Pk( pkN ) ▶₀ #i )
+        case InitNetwork
+        solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1 ) ▶₁ #i )
+          case MS_in_1
+          by solve( !KU( ~kIMSI ) @ #j.1 )
+        qed
+      qed
+    next
+      case MS_out_2
+      solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq,
+                             xRAND
+             ) ▶₀ #i )
+        case MS_test_Then
+        by solve( !KU( ~kIMSI ) @ #j.1 )
+      qed
+    next
+      case MS_test_Else
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq
+             ) ▶₀ #i )
+        case MS_in_2
+        by solve( !KU( ~kIMSI ) @ #j.1 )
+      qed
+    next
+      case MS_test_Then
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq
+             ) ▶₀ #i )
+        case MS_in_2
+        by solve( !KU( ~kIMSI ) @ #j.1 )
+      qed
+    qed
+  qed
+qed
+
+lemma secrecyKeyTag [left, use_induction, reuse]:
+  all-traces
+  "∀ sidMS kIMSI #i.
+    (PlayMS( sidMS, kIMSI ) @ #i) ⇒ (¬(∃ #j. !KU( kIMSI ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidMS kIMSI #i.
+  (PlayMS( sidMS, kIMSI ) @ #i) ∧ ∃ #j. (!KU( kIMSI ) @ #j)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥ (∀ #j. (!KU( ~kIMSI ) @ #j) ⇒ last(#j)) )
+    case case_1
+    solve( PlayMS( sidMS, ~kIMSI ) @ #i )
+      case MS_in_1
+      solve( MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ▶₀ #i )
+        case InitMobileStationSession
+        by solve( !KU( ~kIMSI ) @ #j.1 )
+      qed
+    next
+      case MS_in_2
+      solve( MobileStation2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2
+             ) ▶₀ #i )
+        case MS_out_1
+        by solve( !KU( ~kIMSI ) @ #i )
+      qed
+    next
+      case MS_out_1
+      solve( !Pk( pkN ) ▶₀ #i )
+        case InitNetwork
+        solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1 ) ▶₁ #i )
+          case MS_in_1
+          by solve( !KU( ~kIMSI ) @ #i )
+        qed
+      qed
+    next
+      case MS_out_2
+      solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq,
+                             xRAND
+             ) ▶₀ #i )
+        case MS_test_Then
+        by solve( !KU( ~kIMSI ) @ #i )
+      qed
+    next
+      case MS_test_Else
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq
+             ) ▶₀ #i )
+        case MS_in_2
+        by solve( !KU( ~kIMSI ) @ #i )
+      qed
+    next
+      case MS_test_Then
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq
+             ) ▶₀ #i )
+        case MS_in_2
+        by solve( !KU( ~kIMSI ) @ #i )
+      qed
+    qed
+  next
+    case case_2
+    solve( PlayMS( sidMS, ~kIMSI ) @ #i )
+      case MS_in_1
+      solve( MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ▶₀ #i )
+        case InitMobileStationSession
+        solve( !KU( ~kIMSI ) @ #j.1 )
+          case MS_out_1
+          by solve( !KU( ~skN ) @ #vk.1 )
+        qed
+      qed
+    next
+      case MS_in_2
+      solve( MobileStation2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2
+             ) ▶₀ #i )
+        case MS_out_1
+        solve( !KU( ~kIMSI ) @ #j.1 )
+          case MS_out_1
+          by solve( !KU( ~skN ) @ #vk.2 )
+        qed
+      qed
+    next
+      case MS_out_1
+      solve( !Pk( pkN ) ▶₀ #i )
+        case InitNetwork
+        solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1 ) ▶₁ #i )
+          case MS_in_1
+          solve( !KU( ~kIMSI ) @ #j.1 )
+            case MS_out_1
+            by solve( !KU( ~skN ) @ #vk.1 )
+          qed
+        qed
+      qed
+    next
+      case MS_out_2
+      solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq,
+                             xRAND
+             ) ▶₀ #i )
+        case MS_test_Then
+        solve( !KU( ~kIMSI ) @ #j.1 )
+          case MS_out_1
+          by solve( !KU( ~skN ) @ #vk.2 )
+        qed
+      qed
+    next
+      case MS_test_Else
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq
+             ) ▶₀ #i )
+        case MS_in_2
+        solve( !KU( ~kIMSI ) @ #j.1 )
+          case MS_out_1
+          by solve( !KU( ~skN ) @ #vk.2 )
+        qed
+      qed
+    next
+      case MS_test_Then
+      solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2, xReq
+             ) ▶₀ #i )
+        case MS_in_2
+        solve( !KU( ~kIMSI ) @ #j.1 )
+          case MS_out_1
+          by solve( !KU( ~skN ) @ #vk.2 )
+        qed
+      qed
+    qed
+  qed
+qed
+
+/* All well-formedness checks were successful. */
+
+diffLemma Observational_equivalence:
+rule-equivalence
+  case Rule_Destrd_0_adec
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( !KD( aenc(x, pk(x.1)) ) ▶₀ #i ) )
+      case InitMobileStationId
+      by step( contradiction /* impossible chain */ )
+    next
+      case InitNetwork
+      by step( contradiction /* impossible chain */ )
+    next
+      case MS_out_1
+      step( solve( (#vl, 0) ~~> (#i, 0) ) )
+        case aenc
+        step( solve( !Pk( pk(x) ) ▶₀ #vr ) )
+          case InitNetwork
+          step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1
+                       ) ▶₁ #vr ) )
+            case MS_in_1
+            by step( solve( !KU( ~skN ) @ #vk ) )
+          qed
+        qed
+      next
+        case d_0_adec
+        step( solve( (#vr.1, 0) ~~> (#i, 0) ) )
+          case d_0_fst
+          by step( contradiction /* impossible chain */ )
+        next
+          case d_0_snd
+          step( solve( (#vr.2, 0) ~~> (#i, 0) ) )
+            case d_0_fst
+            step( solve( !Pk( pk(x.2) ) ▶₀ #vr ) )
+              case InitNetwork
+              step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1
+                           ) ▶₁ #vr ) )
+                case MS_in_1
+                by step( contradiction /* forbidden chain */ )
+              qed
+            qed
+          next
+            case d_0_snd
+            by step( contradiction /* impossible chain */ )
+          qed
+        qed
+      qed
+    next
+      case MS_out_2
+      by step( solve( (#vl, 0) ~~> (#i, 0) ) )
+    next
+      case MS_test_Else
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_out_1
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_out_2
+      step( solve( (#vl, 0) ~~> (#i, 0) ) )
+        case d_0_fst
+        by step( contradiction /* impossible chain */ )
+      next
+        case d_0_snd
+        by step( solve( (#vr.1, 0) ~~> (#i, 0) ) )
+      qed
+    next
+      case N_test_2_Then
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_test_Else
+      by step( contradiction /* impossible chain */ )
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( !KD( aenc(x, pk(x.1)) ) ▶₀ #i ) )
+      case InitMobileStationId
+      by step( contradiction /* impossible chain */ )
+    next
+      case InitNetwork
+      by step( contradiction /* impossible chain */ )
+    next
+      case MS_out_1
+      by step( contradiction /* impossible chain */ )
+    next
+      case MS_out_2
+      by step( contradiction /* impossible chain */ )
+    next
+      case MS_test_Else
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_out_1
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_out_2
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_test_2_Then
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_test_Else
+      by step( contradiction /* impossible chain */ )
+    qed
+  qed
+next
+  case Rule_Destrd_0_fst
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( !KD( <x, x.1> ) ▶₀ #i ) )
+      case InitMobileStationId
+      by step( contradiction /* impossible chain */ )
+    next
+      case InitNetwork
+      by step( contradiction /* impossible chain */ )
+    next
+      case MS_out_1
+      step( solve( (#vl, 0) ~~> (#i, 0) ) )
+        case d_0_adec
+        step( solve( (#vr.1, 0) ~~> (#i, 0) ) )
+          case d_0_fst
+          by step( contradiction /* impossible chain */ )
+        next
+          case d_0_snd
+          step( solve( (#vr.2, 0) ~~> (#i, 0) ) )
+            case d_0_fst
+            step( solve( !Pk( pk(x.2) ) ▶₀ #vr ) )
+              case InitNetwork
+              step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1
+                           ) ▶₁ #vr ) )
+                case MS_in_1
+                by step( contradiction /* forbidden chain */ )
+              qed
+            qed
+          next
+            case d_0_snd
+            by step( contradiction /* impossible chain */ )
+          next
+            case pair
+            step( solve( !Pk( pk(x.1) ) ▶₀ #vr ) )
+              case InitNetwork
+              step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, x ) ▶₁ #vr ) )
+                case MS_in_1
+                by step( solve( !KU( ~skN ) @ #vk ) )
+              qed
+            qed
+          qed
+        next
+          case pair
+          step( solve( !Pk( pk(x) ) ▶₀ #vr ) )
+            case InitNetwork
+            step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1
+                         ) ▶₁ #vr ) )
+              case MS_in_1
+              by step( solve( !KU( ~skN ) @ #vk ) )
+            qed
+          qed
+        qed
+      qed
+    next
+      case MS_out_2
+      by step( solve( (#vl, 0) ~~> (#i, 0) ) )
+    next
+      case MS_test_Else
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_out_1
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_out_2
+      step( solve( (#vl, 0) ~~> (#i, 0) ) )
+        case d_0_fst
+        by step( contradiction /* impossible chain */ )
+      next
+        case d_0_snd
+        by step( solve( (#vr.1, 0) ~~> (#i, 0) ) )
+      next
+        case pair
+        step( solve( Network3( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI
+                     ) ▶₀ #vr ) )
+          case N_test_1
+          step( solve( splitEqs(1) ) )
+            case split_case_1
+            step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk ) )
+              case MS_out_1
+              step( solve( !KU( ~n1 ) @ #vk.1 ) )
+                case N_out_1
+                MIRRORED
+              qed
+            next
+              case c_aenc
+              step( solve( !KU( ~kIMSI ) @ #vk.4 ) )
+                case MS_out_1
+                by step( solve( !KU( ~skN ) @ #vk.7 ) )
+              qed
+            qed
+          next
+            case split_case_2
+            MIRRORED
+          qed
+        qed
+      qed
+    next
+      case N_test_2_Then
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_test_Else
+      by step( contradiction /* impossible chain */ )
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( !KD( <x, x.1> ) ▶₀ #i ) )
+      case InitMobileStationId
+      by step( contradiction /* impossible chain */ )
+    next
+      case InitNetwork
+      by step( contradiction /* impossible chain */ )
+    next
+      case MS_out_1
+      by step( contradiction /* impossible chain */ )
+    next
+      case MS_out_2
+      by step( contradiction /* impossible chain */ )
+    next
+      case MS_test_Else
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_out_1
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_out_2
+      step( solve( (#vl, 0) ~~> (#i, 0) ) )
+        case d_0_fst
+        by step( contradiction /* impossible chain */ )
+      next
+        case d_0_snd
+        by step( contradiction /* impossible chain */ )
+      next
+        case pair
+        step( solve( Network3( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI
+                     ) ▶₀ #vr ) )
+          case N_test_1
+          step( solve( splitEqs(1) ) )
+            case split_case_1
+            step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk ) )
+              case c_aenc
+              by step( solve( !KU( ~kIMSI ) @ #vk.4 ) )
+            qed
+          next
+            case split_case_2
+            MIRRORED
+          qed
+        qed
+      qed
+    next
+      case N_test_2_Then
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_test_Else
+      by step( contradiction /* impossible chain */ )
+    qed
+  qed
+next
+  case Rule_Destrd_0_snd
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( !KD( <x, x.1> ) ▶₀ #i ) )
+      case InitMobileStationId
+      by step( contradiction /* impossible chain */ )
+    next
+      case InitNetwork
+      by step( contradiction /* impossible chain */ )
+    next
+      case MS_out_1
+      step( solve( (#vl, 0) ~~> (#i, 0) ) )
+        case d_0_adec
+        step( solve( (#vr.1, 0) ~~> (#i, 0) ) )
+          case d_0_fst
+          by step( contradiction /* impossible chain */ )
+        next
+          case d_0_snd
+          step( solve( (#vr.2, 0) ~~> (#i, 0) ) )
+            case d_0_fst
+            step( solve( !Pk( pk(x.2) ) ▶₀ #vr ) )
+              case InitNetwork
+              step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1
+                           ) ▶₁ #vr ) )
+                case MS_in_1
+                by step( contradiction /* forbidden chain */ )
+              qed
+            qed
+          next
+            case d_0_snd
+            by step( contradiction /* impossible chain */ )
+          next
+            case pair
+            step( solve( !Pk( pk(x.1) ) ▶₀ #vr ) )
+              case InitNetwork
+              step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, x ) ▶₁ #vr ) )
+                case MS_in_1
+                by step( solve( !KU( ~skN ) @ #vk ) )
+              qed
+            qed
+          qed
+        next
+          case pair
+          step( solve( !Pk( pk(x) ) ▶₀ #vr ) )
+            case InitNetwork
+            step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1
+                         ) ▶₁ #vr ) )
+              case MS_in_1
+              by step( solve( !KU( ~skN ) @ #vk ) )
+            qed
+          qed
+        qed
+      qed
+    next
+      case MS_out_2
+      by step( solve( (#vl, 0) ~~> (#i, 0) ) )
+    next
+      case MS_test_Else
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_out_1
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_out_2
+      step( solve( (#vl, 0) ~~> (#i, 0) ) )
+        case d_0_fst
+        by step( contradiction /* impossible chain */ )
+      next
+        case d_0_snd
+        by step( solve( (#vr.1, 0) ~~> (#i, 0) ) )
+      next
+        case pair
+        step( solve( Network3( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI
+                     ) ▶₀ #vr ) )
+          case N_test_1
+          step( solve( splitEqs(1) ) )
+            case split_case_1
+            step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk ) )
+              case MS_out_1
+              step( solve( !KU( ~n1 ) @ #vk.1 ) )
+                case N_out_1
+                MIRRORED
+              qed
+            next
+              case c_aenc
+              step( solve( !KU( ~kIMSI ) @ #vk.4 ) )
+                case MS_out_1
+                by step( solve( !KU( ~skN ) @ #vk.7 ) )
+              qed
+            qed
+          next
+            case split_case_2
+            MIRRORED
+          qed
+        qed
+      qed
+    next
+      case N_test_2_Then
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_test_Else
+      by step( contradiction /* impossible chain */ )
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( !KD( <x, x.1> ) ▶₀ #i ) )
+      case InitMobileStationId
+      by step( contradiction /* impossible chain */ )
+    next
+      case InitNetwork
+      by step( contradiction /* impossible chain */ )
+    next
+      case MS_out_1
+      by step( contradiction /* impossible chain */ )
+    next
+      case MS_out_2
+      by step( contradiction /* impossible chain */ )
+    next
+      case MS_test_Else
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_out_1
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_out_2
+      step( solve( (#vl, 0) ~~> (#i, 0) ) )
+        case d_0_fst
+        by step( contradiction /* impossible chain */ )
+      next
+        case d_0_snd
+        by step( contradiction /* impossible chain */ )
+      next
+        case pair
+        step( solve( Network3( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI
+                     ) ▶₀ #vr ) )
+          case N_test_1
+          step( solve( splitEqs(1) ) )
+            case split_case_1
+            step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk ) )
+              case c_aenc
+              by step( solve( !KU( ~kIMSI ) @ #vk.4 ) )
+            qed
+          next
+            case split_case_2
+            MIRRORED
+          qed
+        qed
+      qed
+    next
+      case N_test_2_Then
+      by step( contradiction /* impossible chain */ )
+    next
+      case N_test_Else
+      by step( contradiction /* impossible chain */ )
+    qed
+  qed
+next
+  case Rule_Equality
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( !KD( x ) ▶₁ #i ) )
+      case InitMobileStationId
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case Var_fresh_IMSI
+        step( solve( !KU( ~IMSI ) @ #vk ) )
+          case InitMobileStationId
+          MIRRORED
+        qed
+      qed
+    next
+      case InitNetwork
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case pk
+        step( solve( !KU( pk(~skN) ) @ #vk ) )
+          case InitNetwork
+          MIRRORED
+        next
+          case c_pk
+          by step( solve( !KU( ~skN ) @ #vk.1 ) )
+        qed
+      qed
+    next
+      case MS_out_1
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case aenc
+        step( solve( !Pk( pkN ) ▶₀ #vr ) )
+          case InitNetwork
+          step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1
+                       ) ▶₁ #vr ) )
+            case MS_in_1
+            step( solve( !KU( aenc(<~kIMSI, xn1, ~n2>, pk(~skN)) ) @ #vk ) )
+              case MS_out_1
+              MIRRORED
+            next
+              case c_aenc
+              step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+                case MS_out_1
+                step( solve( !KU( ~n2 ) @ #vk.6 ) )
+                  case MS_out_1
+                  by step( solve( !KU( ~skN ) @ #vk.7 ) )
+                qed
+              qed
+            qed
+          qed
+        qed
+      next
+        case d_0_adec
+        step( solve( (#vr.1, 0) ~~> (#i, 1) ) )
+          case d_0_fst
+          step( solve( (#vr.2, 0) ~~> (#i, 1) ) )
+            case Var_fresh_kIMSI
+            step( solve( !Pk( pk(x) ) ▶₀ #vr ) )
+              case InitNetwork
+              step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1
+                           ) ▶₁ #vr ) )
+                case MS_in_1
+                by step( solve( !KU( ~skN ) @ #vk.1 ) )
+              qed
+            qed
+          qed
+        next
+          case d_0_snd
+          step( solve( (#vr.2, 0) ~~> (#i, 1) ) )
+            case d_0_fst
+            step( solve( !Pk( pk(x.1) ) ▶₀ #vr ) )
+              case InitNetwork
+              step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1
+                           ) ▶₁ #vr ) )
+                case MS_in_1
+                step( solve( (#vr.3, 0) ~~> (#i, 1) ) )
+                  case Var_msg_xn1
+                  by step( solve( !KU( ~skN ) @ #vk.1 ) )
+                qed
+              qed
+            qed
+          next
+            case d_0_snd
+            step( solve( (#vr.3, 0) ~~> (#i, 1) ) )
+              case Var_fresh_n2
+              step( solve( !Pk( pk(x) ) ▶₀ #vr ) )
+                case InitNetwork
+                step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1
+                             ) ▶₁ #vr ) )
+                  case MS_in_1
+                  by step( solve( !KU( ~skN ) @ #vk.1 ) )
+                qed
+              qed
+            qed
+          next
+            case pair
+            step( solve( !Pk( pk(x) ) ▶₀ #vr ) )
+              case InitNetwork
+              step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1
+                           ) ▶₁ #vr ) )
+                case MS_in_1
+                by step( solve( !KU( ~skN ) @ #vk.1 ) )
+              qed
+            qed
+          qed
+        next
+          case pair
+          step( solve( !Pk( pk(x) ) ▶₀ #vr ) )
+            case InitNetwork
+            step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1
+                         ) ▶₁ #vr ) )
+              case MS_in_1
+              by step( solve( !KU( ~skN ) @ #vk.2 ) )
+            qed
+          qed
+        qed
+      qed
+    next
+      case MS_out_2
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case f2
+        step( solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                                     xReq, xRAND
+                     ) ▶₀ #vr ) )
+          case MS_test_Then
+          step( solve( !KU( f2(~kIMSI, xRAND) ) @ #vk ) )
+            case MS_out_2
+            step( solve( splitEqs(1) ) )
+              case split_case_1
+              step( solve( !KU( f1(~kIMSI, <xRAND, ~n2>) ) @ #vk.6 ) )
+                case N_out_2
+                step( solve( !KU( aenc(<~kIMSI, ~n1, ~n2>, pk(~skN)) ) @ #vk.7 ) )
+                  case MS_out_1
+                  step( solve( !KU( f1(~kIMSI, <~RAND, ~n2.1>) ) @ #vk.8 ) )
+                    case N_out_2
+                    step( solve( !KU( ~RAND ) @ #vk.5 ) )
+                      case N_out_2
+                      step( solve( !KU( ~n1 ) @ #vk.5 ) )
+                        case N_out_1
+                        MIRRORED
+                      qed
+                    qed
+                  next
+                    case c_f1
+                    step( solve( !KU( ~kIMSI ) @ #vk.10 ) )
+                      case MS_out_1
+                      step( solve( !KU( ~n2.1 ) @ #vk.11 ) )
+                        case MS_out_1
+                        by step( solve( !KU( ~skN ) @ #vk.12 ) )
+                      qed
+                    qed
+                  qed
+                next
+                  case c_aenc
+                  step( solve( !KU( ~kIMSI ) @ #vk.12 ) )
+                    case MS_out_1
+                    step( solve( !KU( ~n2 ) @ #vk.14 ) )
+                      case MS_out_1
+                      by step( solve( !KU( ~skN ) @ #vk.15 ) )
+                    qed
+                  qed
+                qed
+              next
+                case c_f1
+                step( solve( !KU( ~kIMSI ) @ #vk.8 ) )
+                  case MS_out_1
+                  step( solve( !KU( ~n2 ) @ #vk.9 ) )
+                    case MS_out_1
+                    by step( solve( !KU( ~skN ) @ #vk.10 ) )
+                  qed
+                qed
+              qed
+            next
+              case split_case_2
+              step( solve( splitEqs(2) ) )
+                case split_case_1
+                by step( solve( !KU( extractMS(xReq, ~kIMSI, ~n2) ) @ #vk.5 ) )
+              next
+                case split_case_2
+                MIRRORED
+              qed
+            qed
+          next
+            case c_f2
+            step( solve( !KU( ~kIMSI ) @ #vk.3 ) )
+              case MS_out_1
+              by step( solve( !KU( ~skN ) @ #vk.5 ) )
+            qed
+          qed
+        qed
+      qed
+    next
+      case MS_test_Else
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case ERROR
+        step( solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                                     xReq
+                     ) ▶₀ #vr ) )
+          case MS_in_2
+          step( solve( !KU( ERROR ) @ #vk ) )
+            case c_ERROR
+            MIRRORED
+          next
+            case coerce
+            step( solve( !KD( ERROR ) ▶₀ #vk ) )
+              case InitMobileStationId
+              by step( contradiction /* impossible chain */ )
+            next
+              case InitNetwork
+              by step( contradiction /* impossible chain */ )
+            next
+              case MS_out_1
+              step( solve( (#vl.1, 0) ~~> (#vk, 0) ) )
+                case d_0_adec
+                step( solve( (#vr.8, 0) ~~> (#vk, 0) ) )
+                  case d_0_fst
+                  by step( contradiction /* impossible chain */ )
+                next
+                  case d_0_snd
+                  step( solve( (#vr.9, 0) ~~> (#vk, 0) ) )
+                    case d_0_fst
+                    step( solve( !Pk( pk(x) ) ▶₀ #vr.7 ) )
+                      case InitNetwork
+                      step( solve( MobileStation1( ~sidMS.1, ~kIMSI.1, ~IMSI.1, xn1.1
+                                   ) ▶₁ #vr.7 ) )
+                        case MS_in_1
+                        by step( contradiction /* forbidden chain */ )
+                      qed
+                    qed
+                  next
+                    case d_0_snd
+                    by step( contradiction /* impossible chain */ )
+                  qed
+                qed
+              qed
+            next
+              case MS_out_2
+              by step( solve( (#vl.1, 0) ~~> (#vk, 0) ) )
+            next
+              case MS_test_Else
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_out_1
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_out_2
+              step( solve( (#vl.1, 0) ~~> (#vk, 0) ) )
+                case d_0_fst
+                by step( contradiction /* impossible chain */ )
+              next
+                case d_0_snd
+                by step( solve( (#vr.8, 0) ~~> (#vk, 0) ) )
+              qed
+            next
+              case N_test_2_Then
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_test_Else
+              by step( contradiction /* impossible chain */ )
+            qed
+          qed
+        qed
+      qed
+    next
+      case N_out_1
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case Var_fresh_n1
+        step( solve( Network( ~sidN, ~skN ) ▶₀ #vr ) )
+          case InitNetworkSession
+          step( solve( !KU( ~n1 ) @ #vk ) )
+            case N_out_1
+            MIRRORED
+          qed
+        qed
+      qed
+    next
+      case N_out_2
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case d_0_fst
+        step( solve( (#vr.1, 0) ~~> (#i, 1) ) )
+          case Var_fresh_RAND
+          step( solve( Network3( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI
+                       ) ▶₀ #vr ) )
+            case N_test_1
+            step( solve( !KU( ~RAND ) @ #vk ) )
+              case N_out_2
+              step( solve( splitEqs(1) ) )
+                case split_case_1
+                MIRRORED
+              next
+                case split_case_2
+                step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.1 ) )
+                  case MS_out_1
+                  step( solve( !KU( ~n1 ) @ #vk.2 ) )
+                    case N_out_1
+                    MIRRORED
+                  qed
+                next
+                  case c_aenc
+                  step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+                    case MS_out_1
+                    by step( solve( !KU( ~skN ) @ #vk.8 ) )
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      next
+        case d_0_snd
+        step( solve( (#vr.1, 0) ~~> (#i, 1) ) )
+          case f1
+          step( solve( Network3( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI
+                       ) ▶₀ #vr ) )
+            case N_test_1
+            step( solve( !KU( f1(~kIMSI, <~RAND, xn2>) ) @ #vk ) )
+              case N_out_2
+              step( solve( splitEqs(1) ) )
+                case split_case_1
+                MIRRORED
+              next
+                case split_case_2
+                step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.1 ) )
+                  case MS_out_1
+                  step( solve( !KU( ~n1 ) @ #vk.2 ) )
+                    case N_out_1
+                    MIRRORED
+                  qed
+                next
+                  case c_aenc
+                  step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+                    case MS_out_1
+                    by step( solve( !KU( ~skN ) @ #vk.8 ) )
+                  qed
+                qed
+              qed
+            next
+              case c_f1
+              step( solve( !KU( ~kIMSI ) @ #vk.3 ) )
+                case MS_out_1
+                by step( solve( !KU( ~skN ) @ #vk.6 ) )
+              qed
+            qed
+          qed
+        qed
+      next
+        case pair
+        step( solve( Network3( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI
+                     ) ▶₀ #vr ) )
+          case N_test_1
+          step( solve( !KU( ~RAND ) @ #vk.1 ) )
+            case N_out_2
+            step( solve( !KU( f1(~kIMSI, <~RAND, xn2>) ) @ #vk.2 ) )
+              case N_out_2
+              step( solve( splitEqs(1) ) )
+                case split_case_1
+                MIRRORED
+              next
+                case split_case_2
+                step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.3 ) )
+                  case MS_out_1
+                  step( solve( !KU( ~n1 ) @ #vk.4 ) )
+                    case N_out_1
+                    MIRRORED
+                  qed
+                next
+                  case c_aenc
+                  step( solve( !KU( ~kIMSI ) @ #vk.7 ) )
+                    case MS_out_1
+                    by step( solve( !KU( ~skN ) @ #vk.10 ) )
+                  qed
+                qed
+              qed
+            next
+              case c_f1
+              step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+                case MS_out_1
+                by step( solve( !KU( ~skN ) @ #vk.7 ) )
+              qed
+            qed
+          qed
+        qed
+      qed
+    next
+      case N_test_2_Then
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case OK
+        step( solve( Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI,
+                               ~RAND, mReq, xRes
+                     ) ▶₀ #vr ) )
+          case N_in_2
+          step( solve( !KU( OK ) @ #vk ) )
+            case c_OK
+            step( solve( splitEqs(1) ) )
+              case split_case_1
+              MIRRORED
+            next
+              case split_case_2
+              step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.2 ) )
+                case MS_out_1
+                step( solve( !KU( ~n1 ) @ #vk.3 ) )
+                  case N_out_1
+                  MIRRORED
+                qed
+              next
+                case c_aenc
+                step( solve( !KU( ~kIMSI ) @ #vk.6 ) )
+                  case MS_out_1
+                  by step( solve( !KU( ~skN ) @ #vk.9 ) )
+                qed
+              qed
+            qed
+          next
+            case coerce
+            step( solve( !KD( OK ) ▶₀ #vk ) )
+              case InitMobileStationId
+              by step( contradiction /* impossible chain */ )
+            next
+              case InitNetwork
+              by step( contradiction /* impossible chain */ )
+            next
+              case MS_out_1
+              step( solve( (#vl.1, 0) ~~> (#vk, 0) ) )
+                case d_0_adec
+                step( solve( (#vr.10, 0) ~~> (#vk, 0) ) )
+                  case d_0_fst
+                  by step( contradiction /* impossible chain */ )
+                next
+                  case d_0_snd
+                  step( solve( (#vr.11, 0) ~~> (#vk, 0) ) )
+                    case d_0_fst
+                    step( solve( !Pk( pk(x) ) ▶₀ #vr.9 ) )
+                      case InitNetwork
+                      step( solve( MobileStation1( ~sidMS, ~kIMSI.1, ~IMSI.1, xn1
+                                   ) ▶₁ #vr.9 ) )
+                        case MS_in_1
+                        by step( contradiction /* forbidden chain */ )
+                      qed
+                    qed
+                  next
+                    case d_0_snd
+                    by step( contradiction /* impossible chain */ )
+                  qed
+                qed
+              qed
+            next
+              case MS_out_2
+              by step( solve( (#vl.1, 0) ~~> (#vk, 0) ) )
+            next
+              case MS_test_Else
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_out_1
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_out_2
+              step( solve( (#vl.1, 0) ~~> (#vk, 0) ) )
+                case d_0_fst
+                by step( contradiction /* impossible chain */ )
+              next
+                case d_0_snd
+                by step( solve( (#vr.10, 0) ~~> (#vk, 0) ) )
+              qed
+            next
+              case N_test_2_Then
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_test_Else
+              by step( contradiction /* impossible chain */ )
+            qed
+          qed
+        qed
+      qed
+    next
+      case N_test_Else
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case ERROR
+        step( solve( Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI,
+                               ~RAND, mReq, xRes
+                     ) ▶₀ #vr ) )
+          case N_in_2
+          step( solve( !KU( ERROR ) @ #vk ) )
+            case c_ERROR
+            step( solve( splitEqs(1) ) )
+              case split_case_1
+              MIRRORED
+            next
+              case split_case_2
+              step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.2 ) )
+                case MS_out_1
+                step( solve( !KU( ~n1 ) @ #vk.3 ) )
+                  case N_out_1
+                  MIRRORED
+                qed
+              next
+                case c_aenc
+                step( solve( !KU( ~kIMSI ) @ #vk.6 ) )
+                  case MS_out_1
+                  by step( solve( !KU( ~skN ) @ #vk.9 ) )
+                qed
+              qed
+            qed
+          next
+            case coerce
+            step( solve( !KD( ERROR ) ▶₀ #vk ) )
+              case InitMobileStationId
+              by step( contradiction /* impossible chain */ )
+            next
+              case InitNetwork
+              by step( contradiction /* impossible chain */ )
+            next
+              case MS_out_1
+              step( solve( (#vl.1, 0) ~~> (#vk, 0) ) )
+                case d_0_adec
+                step( solve( (#vr.10, 0) ~~> (#vk, 0) ) )
+                  case d_0_fst
+                  by step( contradiction /* impossible chain */ )
+                next
+                  case d_0_snd
+                  step( solve( (#vr.11, 0) ~~> (#vk, 0) ) )
+                    case d_0_fst
+                    step( solve( !Pk( pk(x) ) ▶₀ #vr.9 ) )
+                      case InitNetwork
+                      step( solve( MobileStation1( ~sidMS, ~kIMSI.1, ~IMSI.1, xn1
+                                   ) ▶₁ #vr.9 ) )
+                        case MS_in_1
+                        by step( contradiction /* forbidden chain */ )
+                      qed
+                    qed
+                  next
+                    case d_0_snd
+                    by step( contradiction /* impossible chain */ )
+                  qed
+                qed
+              qed
+            next
+              case MS_out_2
+              by step( solve( (#vl.1, 0) ~~> (#vk, 0) ) )
+            next
+              case MS_test_Else
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_out_1
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_out_2
+              step( solve( (#vl.1, 0) ~~> (#vk, 0) ) )
+                case d_0_fst
+                by step( contradiction /* impossible chain */ )
+              next
+                case d_0_snd
+                by step( solve( (#vr.10, 0) ~~> (#vk, 0) ) )
+              qed
+            next
+              case N_test_2_Then
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_test_Else
+              by step( contradiction /* impossible chain */ )
+            qed
+          qed
+        qed
+      qed
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( !KD( x ) ▶₁ #i ) )
+      case InitMobileStationId
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case Var_fresh_IMSI
+        step( solve( !KU( ~IMSI ) @ #vk ) )
+          case InitMobileStationId
+          MIRRORED
+        qed
+      qed
+    next
+      case InitNetwork
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case pk
+        step( solve( !KU( pk(~skN) ) @ #vk ) )
+          case InitNetwork
+          MIRRORED
+        next
+          case c_pk
+          by step( solve( !KU( ~skN ) @ #vk.1 ) )
+        qed
+      qed
+    next
+      case MS_out_1
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case Var_fresh_nIdealaenc
+        step( solve( !Pk( pkN ) ▶₀ #vr ) )
+          case InitNetwork
+          step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1
+                       ) ▶₁ #vr ) )
+            case MS_in_1
+            step( solve( !KU( ~nIdealaenc ) @ #vk ) )
+              case MS_out_1
+              MIRRORED
+            qed
+          qed
+        qed
+      qed
+    next
+      case MS_out_2
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case Var_fresh_nIdealf2
+        step( solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                                     xReq, xRAND
+                     ) ▶₀ #vr ) )
+          case MS_test_Then
+          step( solve( !KU( ~nIdealf2 ) @ #vk ) )
+            case MS_out_2
+            step( solve( splitEqs(1) ) )
+              case split_case_1
+              step( solve( !KU( f1(~kIMSI, <xRAND, ~n2>) ) @ #vk.4 ) )
+                case c_f1
+                by step( solve( !KU( ~kIMSI ) @ #vk.6 ) )
+              qed
+            next
+              case split_case_2
+              MIRRORED
+            qed
+          qed
+        qed
+      qed
+    next
+      case MS_test_Else
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case ERROR
+        step( solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                                     xReq
+                     ) ▶₀ #vr ) )
+          case MS_in_2
+          step( solve( !KU( ERROR ) @ #vk ) )
+            case c_ERROR
+            MIRRORED
+          next
+            case coerce
+            step( solve( !KD( ERROR ) ▶₀ #vk ) )
+              case InitMobileStationId
+              by step( contradiction /* impossible chain */ )
+            next
+              case InitNetwork
+              by step( contradiction /* impossible chain */ )
+            next
+              case MS_out_1
+              by step( contradiction /* impossible chain */ )
+            next
+              case MS_out_2
+              by step( contradiction /* impossible chain */ )
+            next
+              case MS_test_Else
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_out_1
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_out_2
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_test_2_Then
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_test_Else
+              by step( contradiction /* impossible chain */ )
+            qed
+          qed
+        qed
+      qed
+    next
+      case N_out_1
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case Var_fresh_n1
+        step( solve( Network( ~sidN, ~skN ) ▶₀ #vr ) )
+          case InitNetworkSession
+          step( solve( !KU( ~n1 ) @ #vk ) )
+            case N_out_1
+            MIRRORED
+          qed
+        qed
+      qed
+    next
+      case N_out_2
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case d_0_fst
+        step( solve( (#vr.1, 0) ~~> (#i, 1) ) )
+          case Var_fresh_nIdealRAND
+          step( solve( Network3( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI
+                       ) ▶₀ #vr ) )
+            case N_test_1
+            step( solve( !KU( ~nIdealRAND ) @ #vk ) )
+              case N_out_2
+              step( solve( splitEqs(1) ) )
+                case split_case_1
+                MIRRORED
+              next
+                case split_case_2
+                step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.1 ) )
+                  case c_aenc
+                  by step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+                qed
+              qed
+            qed
+          qed
+        qed
+      next
+        case d_0_snd
+        step( solve( (#vr.1, 0) ~~> (#i, 1) ) )
+          case Var_fresh_nIdealf1
+          step( solve( Network3( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI
+                       ) ▶₀ #vr ) )
+            case N_test_1
+            step( solve( !KU( ~nIdealf1 ) @ #vk ) )
+              case N_out_2
+              step( solve( splitEqs(1) ) )
+                case split_case_1
+                MIRRORED
+              next
+                case split_case_2
+                step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.1 ) )
+                  case c_aenc
+                  by step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+                qed
+              qed
+            qed
+          qed
+        qed
+      next
+        case pair
+        step( solve( Network3( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI
+                     ) ▶₀ #vr ) )
+          case N_test_1
+          step( solve( !KU( ~nIdealRAND ) @ #vk.1 ) )
+            case N_out_2
+            step( solve( !KU( ~nIdealf1 ) @ #vk.2 ) )
+              case N_out_2
+              step( solve( splitEqs(1) ) )
+                case split_case_1
+                MIRRORED
+              next
+                case split_case_2
+                step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.3 ) )
+                  case c_aenc
+                  by step( solve( !KU( ~kIMSI ) @ #vk.7 ) )
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    next
+      case N_test_2_Then
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case OK
+        step( solve( Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI,
+                               ~RAND, mReq, xRes
+                     ) ▶₀ #vr ) )
+          case N_in_2
+          step( solve( !KU( OK ) @ #vk ) )
+            case c_OK
+            step( solve( splitEqs(1) ) )
+              case split_case_1
+              MIRRORED
+            next
+              case split_case_2
+              step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.2 ) )
+                case c_aenc
+                by step( solve( !KU( ~kIMSI ) @ #vk.6 ) )
+              qed
+            qed
+          next
+            case coerce
+            step( solve( !KD( OK ) ▶₀ #vk ) )
+              case InitMobileStationId
+              by step( contradiction /* impossible chain */ )
+            next
+              case InitNetwork
+              by step( contradiction /* impossible chain */ )
+            next
+              case MS_out_1
+              by step( contradiction /* impossible chain */ )
+            next
+              case MS_out_2
+              by step( contradiction /* impossible chain */ )
+            next
+              case MS_test_Else
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_out_1
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_out_2
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_test_2_Then
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_test_Else
+              by step( contradiction /* impossible chain */ )
+            qed
+          qed
+        qed
+      qed
+    next
+      case N_test_Else
+      step( solve( (#vl, 0) ~~> (#i, 1) ) )
+        case ERROR
+        step( solve( Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI,
+                               ~RAND, mReq, xRes
+                     ) ▶₀ #vr ) )
+          case N_in_2
+          step( solve( !KU( ERROR ) @ #vk ) )
+            case c_ERROR
+            step( solve( splitEqs(1) ) )
+              case split_case_1
+              MIRRORED
+            next
+              case split_case_2
+              step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.2 ) )
+                case c_aenc
+                by step( solve( !KU( ~kIMSI ) @ #vk.6 ) )
+              qed
+            qed
+          next
+            case coerce
+            step( solve( !KD( ERROR ) ▶₀ #vk ) )
+              case InitMobileStationId
+              by step( contradiction /* impossible chain */ )
+            next
+              case InitNetwork
+              by step( contradiction /* impossible chain */ )
+            next
+              case MS_out_1
+              by step( contradiction /* impossible chain */ )
+            next
+              case MS_out_2
+              by step( contradiction /* impossible chain */ )
+            next
+              case MS_test_Else
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_out_1
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_out_2
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_test_2_Then
+              by step( contradiction /* impossible chain */ )
+            next
+              case N_test_Else
+              by step( contradiction /* impossible chain */ )
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+next
+  case Rule_InitMobileStationId
+  backward-search
+    case LHS
+    step( simplify )
+    MIRRORED
+  next
+    case RHS
+    step( simplify )
+    MIRRORED
+  qed
+next
+  case Rule_InitMobileStationSession
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( !MobileStationState( ~kIMSI, ~IMSI ) ▶₀ #i ) )
+      case InitMobileStationId
+      MIRRORED
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( !MobileStationState( ~kIMSI, ~IMSI ) ▶₀ #i ) )
+      case InitMobileStationId
+      MIRRORED
+    qed
+  qed
+next
+  case Rule_InitNetwork
+  backward-search
+    case LHS
+    step( simplify )
+    MIRRORED
+  next
+    case RHS
+    step( simplify )
+    MIRRORED
+  qed
+next
+  case Rule_InitNetworkSession
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( !NewNetwork( ~skN ) ▶₁ #i ) )
+      case InitNetwork
+      MIRRORED
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( !NewNetwork( ~skN ) ▶₁ #i ) )
+      case InitNetwork
+      MIRRORED
+    qed
+  qed
+next
+  case Rule_MS_in_1
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ▶₀ #i ) )
+      case InitMobileStationSession
+      MIRRORED
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( MobileStation( ~sidMS, ~kIMSI, ~IMSI ) ▶₀ #i ) )
+      case InitMobileStationSession
+      MIRRORED
+    qed
+  qed
+next
+  case Rule_MS_in_2
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( MobileStation2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2
+                 ) ▶₀ #i ) )
+      case MS_out_1
+      MIRRORED
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( MobileStation2( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2
+                 ) ▶₀ #i ) )
+      case MS_out_1
+      MIRRORED
+    qed
+  qed
+next
+  case Rule_MS_out_1
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( !Pk( pkN ) ▶₀ #i ) )
+      case InitNetwork
+      step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1 ) ▶₁ #i ) )
+        case MS_in_1
+        MIRRORED
+      qed
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( !Pk( pkN ) ▶₀ #i ) )
+      case InitNetwork
+      step( solve( MobileStation1( ~sidMS, ~kIMSI, ~IMSI, xn1 ) ▶₁ #i ) )
+        case MS_in_1
+        MIRRORED
+      qed
+    qed
+  qed
+next
+  case Rule_MS_out_2
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                                 xReq, xRAND
+                 ) ▶₀ #i ) )
+      case MS_test_Then
+      step( solve( splitEqs(1) ) )
+        case split_case_1
+        step( solve( !KU( f1(~kIMSI, <xRAND, ~n2>) ) @ #vk.3 ) )
+          case N_out_2
+          step( solve( !KU( aenc(<~kIMSI, ~n1, ~n2>, pk(~skN)) ) @ #vk.4 ) )
+            case MS_out_1
+            step( solve( !KU( ~RAND ) @ #vk.4 ) )
+              case N_out_2
+              step( solve( !KU( ~n1 ) @ #vk.4 ) )
+                case N_out_1
+                MIRRORED
+              qed
+            qed
+          next
+            case c_aenc
+            step( solve( !KU( ~kIMSI ) @ #vk.8 ) )
+              case MS_out_1
+              step( solve( !KU( ~n2 ) @ #vk.10 ) )
+                case MS_out_1
+                by step( solve( !KU( ~skN ) @ #vk.11 ) )
+              qed
+            qed
+          qed
+        next
+          case c_f1
+          step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+            case MS_out_1
+            step( solve( !KU( ~n2 ) @ #vk.6 ) )
+              case MS_out_1
+              by step( solve( !KU( ~skN ) @ #vk.7 ) )
+            qed
+          qed
+        qed
+      next
+        case split_case_2
+        MIRRORED
+      qed
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( MobileStation4( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                                 xReq, xRAND
+                 ) ▶₀ #i ) )
+      case MS_test_Then
+      step( solve( splitEqs(1) ) )
+        case split_case_1
+        step( solve( !KU( f1(~kIMSI, <xRAND, ~n2>) ) @ #vk.3 ) )
+          case c_f1
+          by step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+        qed
+      next
+        case split_case_2
+        MIRRORED
+      qed
+    qed
+  qed
+next
+  case Rule_MS_test_Else
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                                 xReq
+                 ) ▶₀ #i ) )
+      case MS_in_2
+      MIRRORED
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                                 xReq
+                 ) ▶₀ #i ) )
+      case MS_in_2
+      MIRRORED
+    qed
+  qed
+next
+  case Rule_MS_test_Then
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                                 xReq
+                 ) ▶₀ #i ) )
+      case MS_in_2
+      step( solve( splitEqs(0) ) )
+        case split_case_1
+        MIRRORED
+      next
+        case split_case_2
+        step( solve( !KU( f1(~kIMSI, <z, ~n2>) ) @ #vk.3 ) )
+          case N_out_2
+          step( solve( !KU( aenc(<~kIMSI, ~n1, ~n2>, pk(~skN)) ) @ #vk.4 ) )
+            case MS_out_1
+            step( solve( !KU( ~RAND ) @ #vk.4 ) )
+              case N_out_2
+              step( solve( !KU( ~n1 ) @ #vk.4 ) )
+                case N_out_1
+                MIRRORED
+              qed
+            qed
+          next
+            case c_aenc
+            step( solve( !KU( ~kIMSI ) @ #vk.8 ) )
+              case MS_out_1
+              step( solve( !KU( ~n2 ) @ #vk.10 ) )
+                case MS_out_1
+                by step( solve( !KU( ~skN ) @ #vk.11 ) )
+              qed
+            qed
+          qed
+        next
+          case c_f1
+          step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+            case MS_out_1
+            step( solve( !KU( ~n2 ) @ #vk.6 ) )
+              case MS_out_1
+              by step( solve( !KU( ~skN ) @ #vk.7 ) )
+            qed
+          qed
+        qed
+      qed
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( MobileStation3( ~sidMS, ~kIMSI, ~IMSI, xn1, mID, ~n2,
+                                 xReq
+                 ) ▶₀ #i ) )
+      case MS_in_2
+      step( solve( splitEqs(0) ) )
+        case split_case_1
+        MIRRORED
+      next
+        case split_case_2
+        step( solve( !KU( f1(~kIMSI, <z, ~n2>) ) @ #vk.3 ) )
+          case c_f1
+          by step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+        qed
+      qed
+    qed
+  qed
+next
+  case Rule_N_in_1
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( Network1( ~sidN, ~skN, ~n1 ) ▶₀ #i ) )
+      case N_out_1
+      MIRRORED
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( Network1( ~sidN, ~skN, ~n1 ) ▶₀ #i ) )
+      case N_out_1
+      MIRRORED
+    qed
+  qed
+next
+  case Rule_N_in_2
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( Network4( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI,
+                           ~RAND, mReq
+                 ) ▶₀ #i ) )
+      case N_out_2
+      step( solve( splitEqs(1) ) )
+        case split_case_1
+        MIRRORED
+      next
+        case split_case_2
+        step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.1 ) )
+          case MS_out_1
+          step( solve( !KU( ~n1 ) @ #vk.2 ) )
+            case N_out_1
+            MIRRORED
+          qed
+        next
+          case c_aenc
+          step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+            case MS_out_1
+            by step( solve( !KU( ~skN ) @ #vk.8 ) )
+          qed
+        qed
+      qed
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( Network4( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI,
+                           ~RAND, mReq
+                 ) ▶₀ #i ) )
+      case N_out_2
+      step( solve( splitEqs(1) ) )
+        case split_case_1
+        MIRRORED
+      next
+        case split_case_2
+        step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.1 ) )
+          case c_aenc
+          by step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+        qed
+      qed
+    qed
+  qed
+next
+  case Rule_N_out_1
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( Network( ~sidN, ~skN ) ▶₀ #i ) )
+      case InitNetworkSession
+      MIRRORED
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( Network( ~sidN, ~skN ) ▶₀ #i ) )
+      case InitNetworkSession
+      MIRRORED
+    qed
+  qed
+next
+  case Rule_N_out_2
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( Network3( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI
+                 ) ▶₀ #i ) )
+      case N_test_1
+      step( solve( splitEqs(1) ) )
+        case split_case_1
+        step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk ) )
+          case MS_out_1
+          step( solve( !KU( ~n1 ) @ #vk.1 ) )
+            case N_out_1
+            MIRRORED
+          qed
+        next
+          case c_aenc
+          step( solve( !KU( ~kIMSI ) @ #vk.4 ) )
+            case MS_out_1
+            by step( solve( !KU( ~skN ) @ #vk.7 ) )
+          qed
+        qed
+      next
+        case split_case_2
+        MIRRORED
+      qed
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( Network3( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI
+                 ) ▶₀ #i ) )
+      case N_test_1
+      step( solve( splitEqs(1) ) )
+        case split_case_1
+        step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk ) )
+          case c_aenc
+          by step( solve( !KU( ~kIMSI ) @ #vk.4 ) )
+        qed
+      next
+        case split_case_2
+        MIRRORED
+      qed
+    qed
+  qed
+next
+  case Rule_N_test_1
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( !DB( ~kIMSI, ~IMSI ) ▶₀ #i ) )
+      case InitMobileStationId
+      step( solve( Network2( ~sidN, ~skN, ~n1, xID ) ▶₁ #i ) )
+        case N_in_1
+        step( solve( splitEqs(0) ) )
+          case split_case_1
+          MIRRORED
+        next
+          case split_case_2
+          step( solve( !KU( aenc(<~kIMSI, ~n1, z>, pk(~skN)) ) @ #vk ) )
+            case MS_out_1
+            step( solve( !KU( ~n1 ) @ #vk.1 ) )
+              case N_out_1
+              MIRRORED
+            qed
+          next
+            case c_aenc
+            step( solve( !KU( ~kIMSI ) @ #vk.4 ) )
+              case MS_out_1
+              by step( solve( !KU( ~skN ) @ #vk.7 ) )
+            qed
+          qed
+        qed
+      qed
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( !DB( ~kIMSI, ~IMSI ) ▶₀ #i ) )
+      case InitMobileStationId
+      step( solve( Network2( ~sidN, ~skN, ~n1, xID ) ▶₁ #i ) )
+        case N_in_1
+        step( solve( splitEqs(0) ) )
+          case split_case_1
+          MIRRORED
+        next
+          case split_case_2
+          step( solve( !KU( aenc(<~kIMSI, ~n1, z>, pk(~skN)) ) @ #vk ) )
+            case c_aenc
+            by step( solve( !KU( ~kIMSI ) @ #vk.4 ) )
+          qed
+        qed
+      qed
+    qed
+  qed
+next
+  case Rule_N_test_2_Then
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI,
+                           ~RAND, mReq, xRes
+                 ) ▶₀ #i ) )
+      case N_in_2
+      step( solve( splitEqs(1) ) )
+        case split_case_1
+        MIRRORED
+      next
+        case split_case_2
+        step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.1 ) )
+          case MS_out_1
+          step( solve( !KU( ~n1 ) @ #vk.2 ) )
+            case N_out_1
+            MIRRORED
+          qed
+        next
+          case c_aenc
+          step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+            case MS_out_1
+            by step( solve( !KU( ~skN ) @ #vk.8 ) )
+          qed
+        qed
+      qed
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI,
+                           ~RAND, mReq, xRes
+                 ) ▶₀ #i ) )
+      case N_in_2
+      step( solve( splitEqs(1) ) )
+        case split_case_1
+        MIRRORED
+      next
+        case split_case_2
+        step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.1 ) )
+          case c_aenc
+          by step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+        qed
+      qed
+    qed
+  qed
+next
+  case Rule_N_test_Else
+  backward-search
+    case LHS
+    step( simplify )
+    step( solve( Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI,
+                           ~RAND, mReq, xRes
+                 ) ▶₀ #i ) )
+      case N_in_2
+      step( solve( splitEqs(1) ) )
+        case split_case_1
+        MIRRORED
+      next
+        case split_case_2
+        step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.1 ) )
+          case MS_out_1
+          step( solve( !KU( ~n1 ) @ #vk.2 ) )
+            case N_out_1
+            MIRRORED
+          qed
+        next
+          case c_aenc
+          step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+            case MS_out_1
+            by step( solve( !KU( ~skN ) @ #vk.8 ) )
+          qed
+        qed
+      qed
+    qed
+  next
+    case RHS
+    step( simplify )
+    step( solve( Network5( ~sidN, ~skN, ~n1, xID, xn2, ~kIMSI, ~IMSI,
+                           ~RAND, mReq, xRes
+                 ) ▶₀ #i ) )
+      case N_in_2
+      step( solve( splitEqs(1) ) )
+        case split_case_1
+        MIRRORED
+      next
+        case split_case_2
+        step( solve( !KU( aenc(<~kIMSI, ~n1, xn2>, pk(~skN)) ) @ #vk.1 ) )
+          case c_aenc
+          by step( solve( !KU( ~kIMSI ) @ #vk.5 ) )
+        qed
+      qed
+    qed
+  qed
+next
+  case Rule_Send
+  backward-search
+    case LHS
+    step( simplify )
+    MIRRORED
+  next
+    case RHS
+    step( simplify )
+    MIRRORED
+  qed
+qed
+
+end

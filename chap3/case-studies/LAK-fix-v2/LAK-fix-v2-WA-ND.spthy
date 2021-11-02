@@ -1,0 +1,314 @@
+/*************************************
+LAK (FIX v2)
+
+[1] T. van Deursen and S. Radomirović,
+‘Attacks on RFID Protocols’,
+Cryptology ePrint Archive, vol. 2008, no. 310, pp. 1–56, Aug. 2009.
+
+DESCRIPTION OF THE PROTOCOL
+[init.]   kT <-- k, insert (k,0) in DB
+[session] R --> T : nR
+          T --> R : <nT,h(<xnR,nT,kT>)>
+          R --> T : h(<h(<nR,xnT,hkey(k0,n)>),hkey(k0,n),nR>)   if there exists (k0,n) in DB
+                                                                  such that snd(x) = h(<nR,fst(x),hkey(k0,n)>)
+                                                                (k0,n) <-- (k0,n+1)
+          R --> T : h(<h(<nR,xnT,hkey(k0,p)>),hkey(k0,p),nR>)   if there exists (k0,n) in DB, p<=n
+                                                                  such that snd(x) = h(<nR,fst(x),hkey(k0,p)>)
+          T --> R : ok                                          if x = h(<h(<xnR,nT,kT>),kT,xnR>)
+                                                                kT <-- h(kT)
+          T --> R : error                                       otherwise
+
+PROOFS
+- sanity checks
+  * readerComplete            => true (automatic mode)
+  * tagComplete               => true (automatic mode)
+- helpful lemmas
+  * ifHashKnownThenKeyKnown   => true (automatic mode)
+  * initStateDB               => true (interactive mode)
+  * secrecyStateDB            => true (automatic mode)
+  * initStateTag              => true (interactive mode)
+  * secrecyStateTag           => true (automatic mode)
+  * lookupImpliesInsert       => true (automatic mode)
+  * insertImpliesStateDB      => true (automatic mode)
+  * tagCompleteImpliesInsert  => true (automatic mode)
+  * easy                      => ???
+- well-authentication
+  * WA_Tag                    => true (automatic mode)
+  * WA_Reader                 => true (automatic mode)
+- no desynchronisation
+  * ND_Tag                    => true (automatic mode)
+  * ND_Reader                 => true (automatic mode, assuming lemma easy)
+
+We assume that lemma easy is true, because very similar to another lemma (on
+which Tamarin concludes): see below for more details.
+*************************************/
+
+theory LAK_fix_v2_WA_ND
+begin
+
+builtins: multiset
+functions:
+  h/3, hkey/2,
+  OK/0, ERROR/0
+
+/*************************************
+PROTOCOL
+*************************************/
+
+rule InitReader:
+  [ Fr(~sidR) ]
+  --[ NewReaderSession(~sidR) ]->
+  [ Reader(~sidR) ]
+
+rule InitTagId:
+  [ Fr(~k) ]
+  --[ NewTagState(~k,hkey(~k,'1')), InsertDB(hkey(~k,'1')), StateDB(hkey(~k,'1')) ]->
+  [ DB(hkey(~k,'1')), !TagSession(~k,hkey(~k,'1')) ]
+
+rule InitTagSession:
+  [ !TagSession(idT,kT), Fr(~sidT) ]
+  --[ NewTagSession(~sidT,idT,kT), StateT(kT) ]->
+  [ Tag(~sidT,idT,kT) ]
+
+/* READER */
+
+rule R_out1:
+  let m1 = ~nR in
+  [ Reader(~sidR),  Fr(~nR)]
+  --[ OutR1(~sidR,m1) ]->
+  [ Reader1(~sidR,m1), Out(m1) ]
+
+rule R_in1:
+  [ Reader1(~sidR,m1), In(x2) ]
+  --[ InR1(~sidR,m1,x2) ]->
+  [ Reader2(~sidR,m1,x2) ]
+
+rule R_test_sync: // k,kPower <-- k,kPower+'1'
+  let x2 = <xnT,h(m1,xnT,hkey(~k,kPower))> in
+  [ DB(hkey(~k,kPower)), Reader2(~sidR,m1,x2) ]
+  --[ InsertDB(hkey(~k,kPower+'1')), RemoveDB(hkey(~k,kPower)), StateDB(hkey(~k,kPower+'1')), TestR(~sidR) ]->
+  [ DB(hkey(~k,kPower+'1')), Reader3(~sidR,hkey(~k,kPower),m1,x2,xnT,hkey(~k,kPower)) ]
+
+rule R_test_desync: // k,kPower+z <-- k,kPower+z
+  let x2 = <xnT,h(m1,xnT,hkey(~k,kPower))> in
+  [ DB(hkey(~k,kPower+z)), Reader2(~sidR,m1,x2) ]
+  --[ LookupDB(hkey(~k,kPower+z)), StateDB(hkey(~k,kPower+z)), TestR(~sidR) ]->
+  [ DB(hkey(~k,kPower+z)), Reader3(~sidR,hkey(~k,kPower+z),m1,x2,xnT,hkey(~k,kPower)) ]
+
+rule R_out2:
+  let m3 = h(h(m1,xnT,xkT),xkT,m1) in
+  [ Reader3(~sidR,kR,m1,x2,xnT,xkT) ]
+  --[ OutR2(~sidR,m1,x2,m3), CompleteR(~sidR,kR) ]->
+  [ Out(m3) ]
+
+/* TAG */
+
+rule T_in1:
+  [ Tag(~sidT,idT,kT), In(x1) ]
+  --[ PlayT(~sidT,idT,kT), InT1(~sidT,kT,x1) ]->
+  [ Tag1(~sidT,idT,kT,x1) ]
+
+rule T_out1:
+  let m2 = <~nT,h(x1,~nT,kT)> in
+  [ Tag1(~sidT,idT,kT,x1), Fr(~nT) ]
+  --[ PlayT(~sidT,idT,kT), OutT1(~sidT,kT,~nT,x1,m2) ]->
+  [ Tag2(~sidT,idT,kT,~nT,x1,m2), Out(m2) ]
+
+rule T_in2:
+  [ Tag2(~sidT,idT,kT,~nT,x1,m2), In(x3) ]
+  --[ PlayT(~sidT,idT,kT), InT2(~sidT,kT,~nT,x1,m2,x3) ]->
+  [ Tag3(~sidT,idT,kT,~nT,x1,m2,x3) ]
+
+rule T_test_then:
+  let x3 = h(h(x1,~nT,hkey(~k,kPower)),hkey(~k,kPower),x1) in
+  [ Tag3(~sidT,idT,hkey(~k,kPower),~nT,x1,m2,x3) ]
+  --[ PlayT(~sidT,idT,hkey(~k,kPower)), TestT(~sidT), CompleteT(~sidT,hkey(~k,kPower)), NewTagState(idT,hkey(~k,kPower+'1')), StateT(hkey(~k,kPower+'1')) ]->
+  [ !TagSession(idT,hkey(~k,kPower+'1')), Out(OK) ]
+
+rule T_test_else:
+  [ Tag3(~sidT,idT,kT,~nT,x1,m2,x3) ]
+  --[ PlayT(~sidT,idT,kT), NotEqual(x3,h(h(x1,~nT,kT),kT,x1)) ]->
+  [ Out(ERROR) ]
+
+/* ATTACKER */
+// extra rule to represent the fact that the attacker can obtain hkey^(n+1)(x)
+// from hkey^n(x) (the multiset encoding allows the attacker to compute hkey^(n+1)(x)
+// only if the attacker already knows x)
+ rule A_applyhkey:
+   [ In(hkey(k0,kPower)) ]
+   --[ Applyhkey(hkey(k0,kPower)) ]->
+   [ Out(hkey(k0,kPower+'1')) ]
+
+/*************************************
+RESTRICTIONS
+*************************************/
+
+// no interleaving sessions for a given tag
+restriction seqSessionTag:
+  "not (Ex sidT1 sidT2 idT kT1 kT2 kT3 #i1 #i2 #i3.
+    PlayT(sidT1,idT,kT1)@i1 &
+    PlayT(sidT2,idT,kT2)@i2 &
+    PlayT(sidT1,idT,kT3)@i3 &
+    i1<i2 & i2<i3 &
+    not(sidT1=sidT2)
+  )"
+
+// once the tag has updated its state, no session with a previous state
+restriction updateTag:
+  "not (Ex sidT idT k kPower z #i1 #i2.
+    NewTagState(idT,hkey(k,kPower+z)) @ i1 &
+    PlayT(sidT,idT,hkey(k,kPower)) @ i2 &
+    i1 < i2
+  )"
+
+/*************************************
+SANITY CHECKS
+*************************************/
+
+lemma readerComplete:
+  exists-trace
+    "Ex sidR k #i. CompleteR(sidR,hkey(k,'1'))@i"
+
+lemma tagComplete:
+  exists-trace
+    "Ex sidT k #i. CompleteT(sidT,hkey(k,'1'))@i"
+
+/*************************************
+HELPFUL LEMMAS
+*************************************/
+
+lemma ifHashKnownThenKeyKnown [reuse, use_induction]:
+ "All k0 kPower #i. KU(hkey(k0,kPower))@i
+   ==> Ex #j. (KU(k0)@j & j<i)"
+
+lemma initStateDB [reuse, use_induction]:
+  "All k0 kPower #i. StateDB(hkey(k0,kPower))@i
+    ==> ( kPower='1' | (Ex #j. StateDB(hkey(k0,'1'))@j & j<i) )"
+
+lemma secrecyStateDB [reuse]:
+  "not(Ex k0 kPower #i1 #i2. (StateDB(hkey(k0,kPower))@i1 & KU(k0)@i2))"
+
+lemma initStateTag [reuse, use_induction]:
+  "All k0 kPower #i. StateT(hkey(k0,kPower))@i
+    ==> ( kPower='1' | Ex #j. (StateT(hkey(k0,'1'))@j & j<i) )"
+
+lemma secrecyStateTag [reuse]:
+  "not(Ex k0 kPower #i1 #i2. (StateT(hkey(k0,kPower))@i1 & KU(k0)@i2))"
+
+/*************************************
+WELL-AUTHENTICATION
+*************************************/
+
+lemma WA_Tag [use_induction]:
+  "All sidT #i7.
+    TestT(sidT)@i7 ==>
+      ( Ex kT nT sidR m1 m2 m3 #i1 #i2 #i3 #i4 #i5 #i6.
+        (
+          InT2(sidT,kT,nT,m1,m2,m3)@i6 &
+          OutR2(sidR,m1,m2,m3)@i5 &
+          InR1(sidR,m1,m2)@i4 &
+          OutT1(sidT,kT,nT,m1,m2)@i3 &
+          InT1(sidT,kT,m1)@i2 &
+          OutR1(sidR,m1)@i1 &
+          i1<i2 & i2<i3 & i3<i4 & i4<i5 & i5<i6 & i6<i7
+        )
+      )
+  "
+
+lemma WA_Reader [use_induction]:
+  "All sidR #i5.
+    TestR(sidR)@i5 ==>
+      ( Ex sidT kT nT m1 m2 #i1 #i2 #i3 #i4.
+        (
+          InR1(sidR,m1,m2)@i4 &
+          OutT1(sidT,kT,nT,m1,m2)@i3 &
+          InT1(sidT,kT,m1)@i2 &
+          OutR1(sidR,m1)@i1 &
+          i1<i2 & i2<i3 & i3<i4 & i4<i5
+        )
+      )
+  "
+
+/*************************************
+NO DESYNCHRONISATION
+*************************************/
+
+lemma ND_Tag:
+  "All sidT kT nT sidR m1 m2 m3 #i1 #i2 #i3 #i4 #i5 #i6.
+    ( InT2(sidT,kT,nT,m1,m2,m3)@i6 &
+      OutR2(sidR,m1,m2,m3)@i5 &
+      InR1(sidR,m1,m2)@i4 &
+      OutT1(sidT,kT,nT,m1,m2)@i3 &
+      InT1(sidT,kT,m1)@i2 &
+      OutR1(sidR,m1)@i1 &
+      i1<i2 & i2<i3 & i3<i4 & i4<i5 & i5<i6
+    ) ==> (
+      m3 = h(h(m1,nT,kT),kT,m1)
+    )
+  "
+
+// helpful lemmas for ND_Reader
+lemma lookupImpliesInsert [use_induction, reuse]:
+  "All k kPower #i. LookupDB(hkey(k,kPower))@i
+    ==> Ex #j. (InsertDB(hkey(k,kPower))@j & j<i)"
+
+lemma insertImpliesStateDB [reuse]:
+  "All k kPower #i. InsertDB(hkey(k,kPower))@i
+    ==> StateDB(hkey(k,kPower))@i"
+
+lemma tagCompleteImpliesInsert [use_induction, reuse]:
+  "All k sidT kPower #i. CompleteT(sidT,hkey(k,kPower))@i
+    ==> Ex z #j. (InsertDB(hkey(k,kPower+z))@j & j<i)"
+
+// Attempts at helping Tamarin proving lemma easy:
+// Tamarin proves automatically the following lemmas multiset and easy1,
+// but it does not seem to help for proving lemma ND_Reader.
+//
+// lemma multiset [use_induction, reuse]:
+// 	"All kPower k #i. InsertDB(hkey(k,kPower))@i
+// 		==> (kPower = '1') | (Ex z. kPower = '1'+z)"
+//
+// lemma easy1 [use_induction, reuse]:
+//   "All k kPower #i. InsertDB(hkey(k,kPower))@i
+//     ==> InsertDB(hkey(k,'1'))@i | (Ex z. InsertDB(hkey(k,'1'+z))@i)"
+//
+// lemma easy2 [use_induction, reuse]:
+//   "All k kPower z #i. InsertDB(hkey(k,kPower+z))@i
+//   ==> ( InsertDB(hkey(k,kPower+'1'))@i
+//         | (Ex zbis. InsertDB(hkey(k,kPower+'1'+zbis))@i)
+//         | InsertDB(hkey(k,z+'1'))@i
+//         | (Ex kPowerbis. InsertDB(hkey(k,kPowerbis+'1'+z))@i)
+//       )"
+
+// This lemma is the one needed to prove ND_Reader but we did not succeed to prove it.
+lemma easy [use_induction, reuse]:
+  "All k kPower z #i. InsertDB(hkey(k,kPower+z))@i
+    ==> InsertDB(hkey(k,kPower+'1'))@i | (Ex zbis. InsertDB(hkey(k,kPower+'1'+zbis))@i)"
+
+// We do not have to check if a state has not been removed from the DB
+// because RemoveDB(hkey(~k,kPower))@i ==> InsertDB(hkey(~k,kPower+'1'))@i.
+lemma ND_Reader:
+  "All sidT kT nT sidR m1 m2 #i1 #i2 #i3 #i4.
+    ( InR1(sidR,m1,m2)@i4 &
+      OutT1(sidT,kT,nT,m1,m2)@i3 &
+      InT1(sidT,kT,m1)@i2 &
+      OutR1(sidR,m1)@i1 &
+      i1<i2 & i2<i3 & i3<i4
+    ) ==> (
+      (
+        Ex #i5. TestR(sidR)@i5 & i4<i5
+      ) | (
+        Ex xnT k kPower #i0.
+          m2 = <xnT,h(m1,xnT,hkey(k,kPower))> &
+          InsertDB(hkey(k,kPower))@i0 & i0<i4 //&
+          //not(Ex #i6. RemoveDB(hkey(k,kPower))@i6 & i0<i6)
+      ) | (
+        Ex xnT k kPower z #i0.
+          m2 = <xnT,h(m1,xnT,hkey(k,kPower))> &
+          InsertDB(hkey(k,kPower+z))@i0 & i0<i4 //&
+          //not(Ex #i6. RemoveDB(hkey(k,kPower+z))@i6 & i0<i6)
+        )
+    )
+  "
+
+end

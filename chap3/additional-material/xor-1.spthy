@@ -1,0 +1,18 @@
+// Equivalence does not hold
+
+theory ToyXOR1  begin
+
+builtins: xor
+ 
+functions: ok/0
+
+/*************************************
+PROTOCOL
+*************************************/
+
+rule Init:
+  [ Fr(~n1), Fr(~n2), Fr(~id0), Fr(~id1), Fr(~id2) ]
+  -->
+  [ Out(diff(~id0 XOR ~n1,~id1 XOR ~n1)), Out(~n1), Out(diff(~id0 XOR ~n2,~id2 XOR ~n2)), Out(~n2) ]
+
+end

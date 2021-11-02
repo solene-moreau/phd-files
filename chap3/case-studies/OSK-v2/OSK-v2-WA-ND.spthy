@@ -1,0 +1,186 @@
+/*************************************
+OSK (v2)
+
+[1] M. Ohkubo, K. Suzuki, and S. Kinoshita,
+‘Cryptographic Approach to “Privacy-Friendly” Tags’,
+p. 17.
+
+DESCRIPTION OF THE PROTOCOL
+[init.]   kT <-- k, insert k in DB
+[session] T --> R : g(kT)   kT <-- h(kT)
+          R --> T : OK      if there exists n >= 0 and kR in DB
+                              such that x=g(h^n(kR))
+
+PROOFS
+- sanity checks
+  * readerComplete          => true (automatic mode)
+  * tagComplete             => true (automatic mode)
+- helpful lemmas
+  * ifHashKnownThenKeyKnown => true (automatic mode)
+  * tagAlwaysInit           => true (automatic mode)
+  * databaseAlwaysInit      => true (automatic mode)
+- well-authentication
+  * WA_Reader               => true (automatic mode)
+- no desynchronisation
+  * ND_Reader               => true (automatic mode)
+*************************************/
+
+theory OSK_v2_WA_ND
+begin
+
+builtins: multiset
+functions: h/2, g/1, OK/0
+
+/*************************************
+PROTOCOL
+*************************************/
+
+rule InitReader:
+  [ Fr(~sidR) ]
+  --[ NewReaderSession(~sidR) ]->
+  [ Reader(~sidR) ]
+
+rule InitTagId:
+  [ Fr(~k0) ]
+  --[ InsertDB(h(~k0,'1')) ]->
+  [ !DB(h(~k0,'1')), !TagSession(~k0,h(~k0,'1')) ]
+
+rule InitTagSession:
+  [ !TagSession(idT,kT), Fr(~sidT) ]
+  --[ NewTagSession(~sidT,idT,kT) ]->
+  [ Tag(~sidT,idT,kT) ]
+
+/* TAG */
+
+rule T_update:
+  [ Tag(~sidT,idT,h(~kT0,kTPower)) ]
+  --[ PlayT(~sidT,idT,h(~kT0,kTPower)), UpdateTag(~sidT,idT,h(~kT0,kTPower+'1')) ]->
+  [ Tag1(~sidT,idT,h(~kT0,kTPower)), !TagSession(idT,h(~kT0,kTPower+'1')) ]
+
+rule T_out:
+  let m = g(kT) in
+  [ Tag1(~sidT,idT,kT) ]
+  --[ PlayT(~sidT,idT,kT), OutT(~sidT,kT,m), CompleteT(~sidT) ]->
+  [ Out(m) ]
+
+/* READER */
+
+rule R_in:
+  [ Reader(~sidR), In(x) ]
+  --[ InR(~sidR,x) ]->
+  [ Reader1(~sidR,x) ]
+
+rule R_test_synch:
+  let x = g(h(~kR0,kRPower)) in
+  [ !DB(h(~kR0,kRPower)), Reader1(~sidR,x) ]
+  --[ LookupDB(h(~kR0,kRPower)), TestR(~sidR), CompleteR(~sidR) ]->
+  [ Out(OK) ]
+
+rule R_test_desynch:
+  let x = g(h(~kR0,kRPower+z)) in
+  [ !DB(h(~kR0,kRPower)), Reader1(~sidR,x) ]
+  --[ LookupDB(h(~kR0,kRPower)), TestR(~sidR), CompleteR(~sidR) ]->
+  [ Out(OK)]
+
+/* ATTACKER */
+// extra rule to represent the fact that the attacker can obtain h^(n+1)(x)
+// from h^n(x) (the multiset encoding allows the attacker to compute h^(n+1)(x)
+// only if the attacker already knows x)
+ rule A_applyh:
+   [ In(h(k0,kPower)) ]
+   --[ Applyh(h(k0,kPower)) ]->
+   [ Out(h(k0,kPower+'1')) ]
+
+/*************************************
+RESTRICTIONS
+*************************************/
+
+// no interleaving sessions for a given tag
+restriction seqSessionTag:
+  "not (Ex sidT1 sidT2 idT kT1 kT2 kT3 #i1 #i2 #i3.
+    PlayT(sidT1,idT,kT1)@i1 &
+    PlayT(sidT2,idT,kT2)@i2 &
+    PlayT(sidT1,idT,kT3)@i3 &
+    i1<i2 & i2<i3 &
+    not(sidT1=sidT2)
+  )"
+
+// once the tag has updated its state, no session with a previous state
+restriction updateTag:
+  "not (Ex sidT1 sidT2 idT kT0 kTPower z #i1 #i2.
+    UpdateTag(sidT1,idT,h(kT0,kTPower+z))@i1 &
+    PlayT(sidT2,idT,h(kT0,kTPower))@i2 &
+    i1<i2 &
+    not(sidT1=sidT2)
+  )"
+
+/*************************************
+SANITY CHECKS
+*************************************/
+
+lemma tagComplete:
+  exists-trace
+  "Ex sidT #i. CompleteT(sidT)@i"
+
+lemma readerComplete:
+  exists-trace
+  "Ex sidR #i. CompleteR(sidR)@i"
+
+/*************************************
+HELPFUL LEMMAS
+*************************************/
+
+lemma ifHashKnownThenKeyKnown [reuse, use_induction]:
+ "All k0 kPower #i. KU(h(k0,kPower))@i
+   ==> Ex #j. (KU(k0)@j & j<i)"
+
+lemma tagAlwaysInit [reuse, use_induction]:
+  "All sidT idT kT0 kTPower #i.
+    UpdateTag(sidT,idT,h(kT0,kTPower))@i
+    ==> Ex #j. (InsertDB(h(kT0,'1'))@j & j<i)"
+
+lemma databaseAlwaysInit [reuse, use_induction]:
+  "All kT0 kTPower #i.
+    LookupDB(h(kT0,kTPower))@i
+    ==> ( kTPower = '1' | (Ex #j. (InsertDB(h(kT0,'1'))@j & j<i)) )"
+
+/*************************************
+WELL AUTHENTICATION
+*************************************/
+
+lemma WA_Reader [use_induction]:
+  "All sidR #i3.
+    TestR(sidR)@i3 ==>
+      ( Ex sidT kT m #i1 #i2.
+        (
+          InR(sidR,m)@i2 &
+          OutT(sidT,kT,m)@i1 &
+          i1<i2
+        )
+      )
+  "
+
+/*************************************
+NO DESYNCHRONISATION
+*************************************/
+
+lemma ND_Reader:
+  "All sidT sidR kT m #i1 #i2.
+    ( InR(sidR,m)@i2 &
+      OutT(sidT,kT,m)@i1 &
+      i1<i2
+    ) ==> (
+      (
+        Ex kR #i0.
+          m = g(kR) &
+          InsertDB(kR)@i0 & i0<i2
+      ) | (
+        Ex kR0 kRPower kRPowerOld kRPowerDelta #i0.
+          m = g(h(kR0,kRPower)) &
+          kRPower = kRPowerOld + kRPowerDelta &
+          InsertDB(h(kR0,kRPowerOld))@i0 & i0<i2
+      )
+    )
+  "
+
+end

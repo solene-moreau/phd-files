@@ -1,0 +1,386 @@
+theory OSK_v1_WA_ND begin
+
+// Function signature and definition of the equational theory E
+
+builtins: multiset
+functions: OK/0, fst/1, g/1, h/2, pair/2, snd/1
+equations: fst(<x.1, x.2>) = x.1, snd(<x.1, x.2>) = x.2
+
+
+
+rule (modulo E) InitReader:
+   [ Fr( ~sidR ) ]
+  --[ NewReaderSession( ~sidR ) ]->
+   [ Reader( ~sidR ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) InitTagId:
+   [ Fr( ~k0 ) ]
+  --[ InsertDB( h(~k0, '1') ) ]->
+   [ DB( h(~k0, '1') ), !TagSession( ~k0, h(~k0, '1') ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) InitTagSession:
+   [ !TagSession( idT, kT ), Fr( ~sidT ) ]
+  --[ NewTagSession( ~sidT, idT, kT ) ]->
+   [ Tag( ~sidT, idT, kT ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) T_update:
+   [ Tag( ~sidT, idT, h(~kT0, kTPower) ) ]
+  --[
+  PlayT( ~sidT, idT, h(~kT0, kTPower) ),
+  UpdateTag( ~sidT, idT, h(~kT0, ('1'+kTPower)) )
+  ]->
+   [
+   Tag1( ~sidT, idT, h(~kT0, kTPower) ),
+   !TagSession( idT, h(~kT0, ('1'+kTPower)) )
+   ]
+
+  // loop breaker: [0]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) T_out:
+   [ Tag1( ~sidT, idT, kT ) ]
+  --[
+  PlayT( ~sidT, idT, kT ), OutT( ~sidT, kT, g(kT) ),
+  CompleteT( ~sidT )
+  ]->
+   [ Out( g(kT) ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) R_in:
+   [ Reader( ~sidR ), In( x ) ]
+  --[ InR( ~sidR, x ) ]->
+   [ Reader1( ~sidR, x ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) R_test_synch:
+   [ DB( h(~kR0, kRPower) ), Reader1( ~sidR, g(h(~kR0, kRPower)) ) ]
+  --[
+  InsertDB( h(~kR0, ('1'+kRPower)) ), RemoveDB( h(~kR0, kRPower) ),
+  TestR( ~sidR ), CompleteR( ~sidR )
+  ]->
+   [ DB( h(~kR0, ('1'+kRPower)) ), Out( OK ) ]
+
+  // loop breaker: [0]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) R_test_desynch:
+   [ DB( h(~kR0, kRPower) ), Reader1( ~sidR, g(h(~kR0, (kRPower+z))) )
+   ]
+  --[
+  InsertDB( h(~kR0, ('1'+kRPower+z)) ), RemoveDB( h(~kR0, kRPower) ),
+  TestR( ~sidR ), CompleteR( ~sidR )
+  ]->
+   [ DB( h(~kR0, ('1'+kRPower+z)) ), Out( OK ) ]
+
+  // loop breaker: [0]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) A_applyh:
+   [ In( h(k0, kPower) ) ]
+  --[ Applyh( ) ]->
+   [ Out( h(k0, ('1'+kPower)) ) ]
+
+  /* has exactly the trivial AC variant */
+
+restriction seqSessionTag:
+  "¬(∃ sidT1 sidT2 idT kT1 kT2 kT3 #i1 #i2 #i3.
+      (((((PlayT( sidT1, idT, kT1 ) @ #i1) ∧
+          (PlayT( sidT2, idT, kT2 ) @ #i2)) ∧
+         (PlayT( sidT1, idT, kT3 ) @ #i3)) ∧
+        (#i1 < #i2)) ∧
+       (#i2 < #i3)) ∧
+      (¬(sidT1 = sidT2)))"
+  // safety formula
+
+restriction updateTag:
+  "¬(∃ sidT1 sidT2 idT kT0 kTPower z #i1 #i2.
+      (((UpdateTag( sidT1, idT, h(kT0, (kTPower+z)) ) @ #i1) ∧
+        (PlayT( sidT2, idT, h(kT0, kTPower) ) @ #i2)) ∧
+       (#i1 < #i2)) ∧
+      (¬(sidT1 = sidT2)))"
+  // safety formula
+
+lemma tagComplete:
+  exists-trace "∃ sidT #i. CompleteT( sidT ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidT #i. (CompleteT( sidT ) @ #i)"
+*/
+simplify
+solve( Tag1( ~sidT, idT, kT ) ▶₀ #i )
+  case T_update
+  solve( Tag( ~sidT, idT, h(~kT0, kTPower) ) ▶₀ #vr )
+    case InitTagSession_case_1
+    SOLVED // trace found
+  qed
+qed
+
+lemma readerComplete:
+  exists-trace "∃ sidR #i. CompleteR( sidR ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidR #i. (CompleteR( sidR ) @ #i)"
+*/
+simplify
+solve( CompleteR( sidR ) @ #i )
+  case R_test_desynch
+  solve( Reader1( ~sidR, g(h(~kR0, (kRPower+z))) ) ▶₁ #i )
+    case R_in
+    solve( !KU( g(h(~kR0, (kRPower+z))) ) @ #vk )
+      case T_out
+      solve( DB( h(~kR0, kRPower) ) ▶₀ #i )
+        case InitTagId
+        solve( Tag( ~sidT, idT, h(~kR0, ('1'+z)) ) ▶₀ #vr.3 )
+          case InitTagSession
+          solve( Tag( ~sidT.1, idT, h(~kR0, z) ) ▶₀ #vr.6 )
+            case InitTagSession_case_1
+            SOLVED // trace found
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma ND_Reader:
+  all-traces
+  "∀ sidT sidR kT m #i1 #i2.
+    (((InR( sidR, m ) @ #i2) ∧ (OutT( sidT, kT, m ) @ #i1)) ∧
+     (#i1 < #i2)) ⇒
+    (((∃ #i3. (TestR( sidR ) @ #i3) ∧ (#i2 < #i3)) ∨
+      (∃ kR #i0.
+        (((m = g(kR)) ∧ (InsertDB( kR ) @ #i0)) ∧ (#i0 < #i2)) ∧
+        (¬(∃ #i4. (RemoveDB( kR ) @ #i4) ∧ (#i0 < #i4))))) ∨
+     (∃ kR0 kRPower kRPowerOld kRPowerDelta #i0.
+       ((((m = g(h(kR0, kRPower))) ∧
+          (kRPower = (kRPowerDelta+kRPowerOld))) ∧
+         (InsertDB( h(kR0, kRPowerOld) ) @ #i0)) ∧
+        (#i0 < #i2)) ∧
+       (¬(∃ #i4. (RemoveDB( h(kR0, kRPowerOld) ) @ #i4) ∧ (#i0 < #i4)))))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidT sidR kT m #i1 #i2.
+  (InR( sidR, m ) @ #i2) ∧ (OutT( sidT, kT, m ) @ #i1)
+ ∧
+  (#i1 < #i2) ∧
+  (∀ #i3. (TestR( sidR ) @ #i3) ⇒ ¬(#i2 < #i3)) ∧
+  (∀ kR #i0.
+    (m = g(kR)) ∧ (InsertDB( kR ) @ #i0)
+   ⇒
+    ((¬(#i0 < #i2)) ∨ (∃ #i4. (RemoveDB( kR ) @ #i4) ∧ #i0 < #i4))) ∧
+  (∀ kR0 kRPower kRPowerOld kRPowerDelta #i0.
+    (m = g(h(kR0, kRPower))) ∧
+    (kRPower = (kRPowerDelta+kRPowerOld)) ∧
+    (InsertDB( h(kR0, kRPowerOld) ) @ #i0)
+   ⇒
+    ((¬(#i0 < #i2)) ∨
+     (∃ #i4. (RemoveDB( h(kR0, kRPowerOld) ) @ #i4) ∧ #i0 < #i4)))"
+*/
+simplify
+solve( Tag1( ~sidT, idT, kT ) ▶₀ #i1 )
+  case T_update
+  solve( Reader( ~sidR ) ▶₀ #i2 )
+    case InitReader
+    solve( Tag( ~sidT, idT, h(~kT0, kTPower) ) ▶₀ #vr )
+      case InitTagSession_case_1
+      solve( RemoveDB( h(~kT0, '1') ) @ #i4 )
+        case R_test_synch
+        solve( Reader1( ~sidR.1, g(h(~kT0, '1')) ) ▶₁ #i4 )
+          case R_in
+          solve( DB( h(~kT0, '1') ) ▶₀ #i4 )
+            case InitTagId
+            solve( !KU( g(h(~kT0, '1')) ) @ #vk )
+              case T_out
+              solve( Tag( ~sidT.1, idT, h(~kT0, '1') ) ▶₀ #vr.7 )
+                case InitTagSession
+                solve( (¬(#vr < #vr.6))  ∥ (~sidT = ~sidT.1) )
+                  case case_2
+                  solve( RemoveDB( h(~kT0, '1') ) @ #i4.1 )
+                    case R_test_synch
+                    solve( Reader1( ~sidR.2, g(h(~kT0, '1')) ) ▶₁ #i4.1 )
+                      case R_in
+                      solve( DB( h(~kT0, '1') ) ▶₀ #i4.1 )
+                        case InitTagId
+                        SOLVED // trace found
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma databaseAlwaysInit [reuse, use_induction]:
+  all-traces
+  "∀ kT0 kTPower #i.
+    (InsertDB( h(kT0, kTPower) ) @ #i) ⇒
+    ((kTPower = '1') ∨
+     (∃ #j. (InsertDB( h(kT0, '1') ) @ #j) ∧ (#j < #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ kT0 kTPower #i.
+  (InsertDB( h(kT0, kTPower) ) @ #i)
+ ∧
+  (¬(kTPower = '1')) ∧
+  (∀ #j. (InsertDB( h(kT0, '1') ) @ #j) ⇒ ¬(#j < #i))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥ (kTPower = '1')  ∥
+         (∃ #j.
+           (InsertDB( h(kT0, '1') ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i)) )
+    case case_1
+    solve( InsertDB( h(kT0, kTPower) ) @ #i )
+      case InitTagId
+      by contradiction /* from formulas */
+    next
+      case R_test_desynch
+      solve( DB( h(~kR0, kRPower) ) ▶₀ #i )
+        case InitTagId
+        by contradiction /* from formulas */
+      next
+        case R_test_desynch
+        by contradiction /* from formulas */
+      next
+        case R_test_synch
+        by contradiction /* from formulas */
+      qed
+    next
+      case R_test_synch
+      solve( DB( h(~kR0, kRPower) ) ▶₀ #i )
+        case InitTagId
+        by contradiction /* from formulas */
+      next
+        case R_test_desynch
+        by contradiction /* from formulas */
+      next
+        case R_test_synch
+        by contradiction /* from formulas */
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  next
+    case case_3
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma ifHashKnownThenKeyKnown [reuse, use_induction]:
+  all-traces
+  "∀ k0 kPower #i.
+    (!KU( h(k0, kPower) ) @ #i) ⇒ (∃ #j. (!KU( k0 ) @ #j) ∧ (#j < #i))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ k0 kPower #i.
+  (!KU( h(k0, kPower) ) @ #i) ∧ ∀ #j. (!KU( k0 ) @ #j) ⇒ ¬(#j < #i)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥
+         (∃ #j. (!KU( k0 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i)) )
+    case case_1
+    solve( !KU( h(k0, kPower) ) @ #i )
+      case A_applyh
+      by contradiction /* from formulas */
+    next
+      case c_h
+      by contradiction /* from formulas */
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma WA_Reader [use_induction]:
+  all-traces
+  "∀ sidR #i3.
+    (TestR( sidR ) @ #i3) ⇒
+    (∃ sidT kT m #i1 #i2.
+      ((InR( sidR, m ) @ #i2) ∧ (OutT( sidT, kT, m ) @ #i1)) ∧
+      (#i1 < #i2))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidR #i3.
+  (TestR( sidR ) @ #i3)
+ ∧
+  ∀ sidT kT m #i1 #i2.
+   (InR( sidR, m ) @ #i2) ∧ (OutT( sidT, kT, m ) @ #i1)
+  ⇒
+   ¬(#i1 < #i2)"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i3))  ∥
+         (∃ sidT kT m #i1 #i2.
+           (InR( sidR, m ) @ #i2) ∧ (OutT( sidT, kT, m ) @ #i1)
+          ∧
+           (¬(last(#i2))) ∧ (¬(last(#i1))) ∧ (#i1 < #i2)) )
+    case case_1
+    solve( TestR( sidR ) @ #i3 )
+      case R_test_desynch
+      solve( Reader1( ~sidR, g(h(~kR0, (kRPower+z))) ) ▶₁ #i3 )
+        case R_in
+        solve( InsertDB( h(~kR0, '1') ) @ #j )
+          case InitTagId
+          solve( !KU( g(h(~kR0, (kRPower+z))) ) @ #vk )
+            case T_out
+            by contradiction /* from formulas */
+          next
+            case c_g
+            by solve( !KU( ~kR0 ) @ #j.1 )
+          qed
+        qed
+      qed
+    next
+      case R_test_synch
+      solve( Reader1( ~sidR, g(h(~kR0, kRPower)) ) ▶₁ #i3 )
+        case R_in
+        solve( InsertDB( h(~kR0, '1') ) @ #j )
+          case InitTagId
+          solve( !KU( g(h(~kR0, kRPower)) ) @ #vk )
+            case T_out
+            by contradiction /* from formulas */
+          next
+            case c_g
+            by solve( !KU( ~kR0 ) @ #j.1 )
+          qed
+        qed
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+/* All well-formedness checks were successful. */
+
+end

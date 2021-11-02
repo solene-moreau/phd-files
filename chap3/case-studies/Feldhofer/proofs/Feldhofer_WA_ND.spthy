@@ -1,0 +1,718 @@
+theory Feldhofer_WA_ND begin
+
+// Function signature and definition of the equational theory E
+
+functions: ERROR/0, OK/0, fst/1, pair/2, sdec/2, senc/2, snd/1
+equations:
+    fst(<x.1, x.2>) = x.1,
+    sdec(senc(x.1, x.2), x.2) = x.1,
+    snd(<x.1, x.2>) = x.2
+
+
+
+rule (modulo E) InitReader:
+   [ Fr( ~sidR ) ]
+  --[ NewReaderSession( ~sidR ) ]->
+   [ Reader( ~sidR ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) InitTagId:
+   [ Fr( ~k ) ]
+  --[ NewId( ~k ), InsertDB( ~k ) ]->
+   [ !DB( ~k ), !TagSession( ~k ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) InitTagSession:
+   [ !TagSession( ~kT ), Fr( ~sidT ) ]
+  --[ NewTagSession( ~sidT, ~kT ) ]->
+   [ Tag( ~sidT, ~kT ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) R_out1:
+   [ Reader( ~sidR ), Fr( ~nR ) ]
+  --[ OutR1( ~sidR, ~nR ) ]->
+   [ Reader1( ~sidR, ~nR ), Out( ~nR ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) R_in1:
+   [ Reader1( ~sidR, m1 ), In( x2 ) ]
+  --[ InR1( ~sidR, m1, x2 ) ]->
+   [ Reader2( ~sidR, m1, x2 ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) R_test:
+   [ !DB( kR ), Reader2( ~sidR, m1, senc(<m1, xnT>, kR) ) ]
+  --[
+  TestR( ~sidR ), LookupDB( kR ),
+  SourceInR1( senc(<m1, xnT>, kR), xnT )
+  ]->
+   [ Reader3( ~sidR, m1, senc(<m1, xnT>, kR), xnT, kR ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) R_out2:
+   [ Reader3( ~sidR, m1, x2, xnT, kR ) ]
+  --[ OutR2( ~sidR, m1, x2, senc(<xnT, m1>, kR) ), CompleteR( ~sidR )
+  ]->
+   [ Out( senc(<xnT, m1>, kR) ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) T_in1:
+   [ Tag( ~sidT, kT ), In( x1 ) ]
+  --[ PlayT( ~sidT, kT ), InT1( ~sidT, kT, x1 ) ]->
+   [ Tag1( ~sidT, kT, x1 ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) T_out1:
+   [ Tag1( ~sidT, kT, x1 ), Fr( ~nT ) ]
+  --[
+  PlayT( ~sidT, kT ),
+  OutT1( ~sidT, kT, ~nT, x1, senc(<x1, ~nT>, kT) ),
+  SourceOutT1( senc(<x1, ~nT>, kT) )
+  ]->
+   [
+   Tag2( ~sidT, kT, ~nT, x1, senc(<x1, ~nT>, kT) ),
+   Out( senc(<x1, ~nT>, kT) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) T_in2:
+   [ Tag2( ~sidT, kT, ~nT, x1, m2 ), In( x3 ) ]
+  --[ PlayT( ~sidT, kT ), InT2( ~sidT, kT, ~nT, x1, m2, x3 ) ]->
+   [ Tag3( ~sidT, kT, ~nT, x1, m2, x3 ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) T_test_then:
+   [ Tag3( ~sidT, kT, ~nT, x1, m2, senc(<~nT, x1>, kT) ) ]
+  --[ PlayT( ~sidT, kT ), TestT( ~sidT ), CompleteT( ~sidT ) ]->
+   [ Out( OK ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) T_test_else:
+   [ Tag3( ~sidT, kT, ~nT, x1, m2, x3 ) ]
+  --[
+  PlayT( ~sidT, kT ), ElseT( ~sidT ),
+  NotEqual( x3, senc(<~nT, x1>, kT) )
+  ]->
+   [ Out( ERROR ) ]
+
+  /* has exactly the trivial AC variant */
+
+restriction notEqual:
+  "∀ x y #i. (NotEqual( x, y ) @ #i) ⇒ (¬(x = y))"
+  // safety formula
+
+restriction seqSessionTag:
+  "¬(∃ sidT1 sidT2 kT #i1 #i2 #i3.
+      (((((PlayT( sidT1, kT ) @ #i1) ∧ (PlayT( sidT2, kT ) @ #i2)) ∧
+         (PlayT( sidT1, kT ) @ #i3)) ∧
+        (#i1 < #i2)) ∧
+       (#i2 < #i3)) ∧
+      (¬(sidT1 = sidT2)))"
+  // safety formula
+
+lemma readerComplete:
+  exists-trace "∃ sidR #i. CompleteR( sidR ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidR #i. (CompleteR( sidR ) @ #i)"
+*/
+simplify
+solve( Reader3( ~sidR, m1, x2, xnT, kR ) ▶₀ #i )
+  case R_test
+  solve( !KU( senc(<~nR, xnT>, ~k) ) @ #vk )
+    case T_out1
+    solve( !KU( ~nR ) @ #vk.1 )
+      case R_out1
+      SOLVED // trace found
+    qed
+  qed
+qed
+
+lemma tagComplete:
+  exists-trace "∃ sidT #i. CompleteT( sidT ) @ #i"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ sidT #i. (CompleteT( sidT ) @ #i)"
+*/
+simplify
+solve( Tag3( ~sidT, kT, ~nT, x1, m2, senc(<~nT, x1>, kT) ) ▶₀ #i )
+  case T_in2
+  solve( !KU( senc(<~nT, x1>, ~kT) ) @ #vk )
+    case R_out2
+    solve( !KU( ~nR ) @ #vk.1 )
+      case R_out1
+      solve( !KU( senc(<~nR, ~nT>, ~kT) ) @ #vk.2 )
+        case T_out1
+        SOLVED // trace found
+      qed
+    qed
+  qed
+qed
+
+lemma sourcem2 [sources]:
+  all-traces
+  "∀ m2 nT #i.
+    (SourceInR1( m2, nT ) @ #i) ⇒
+    ((∃ #j. (SourceOutT1( m2 ) @ #j) ∧ (#j < #i)) ∨
+     (∃ #j. (!KU( nT ) @ #j) ∧ (#j < #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ m2 nT #i.
+  (SourceInR1( m2, nT ) @ #i)
+ ∧
+  (∀ #j. (SourceOutT1( m2 ) @ #j) ⇒ ¬(#j < #i)) ∧
+  (∀ #j. (!KU( nT ) @ #j) ⇒ ¬(#j < #i))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i))  ∥
+         (∃ #j.
+           (SourceOutT1( senc(<m1, nT>, kR) ) @ #j)
+          ∧
+           (¬(last(#j))) ∧ (#j < #i))  ∥
+         (∃ #j. (!KU( nT ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i)) )
+    case case_1
+    solve( !DB( kR ) ▶₀ #i )
+      case InitTagId
+      solve( Reader2( ~sidR, m1, senc(<m1, nT>, ~k) ) ▶₁ #i )
+        case R_in1
+        solve( !KU( senc(<~nR, nT>, ~k) ) @ #vk )
+          case R_out2_case_1
+          solve( (∃ #j.
+                   (SourceOutT1( senc(<~nR.1, ~nR>, ~k) ) @ #j)
+                  ∧
+                   (¬(last(#j))) ∧ (#j < #vr.5))  ∥
+                 (∃ #j. (!KU( ~nR ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.5)) )
+            case case_2
+            solve( !KU( ~nR ) @ #j )
+              case R_out1
+              solve( !KU( senc(<~nR.1, ~nR>, ~k) ) @ #vk.1 )
+                case R_out2_case_1
+                by contradiction /* cyclic */
+              next
+                case R_out2_case_2
+                solve( (∃ #j.
+                         (SourceOutT1( senc(<~nR.2, xnT>, ~k.1) ) @ #j)
+                        ∧
+                         (¬(last(#j))) ∧ (#j < #vr.12))  ∥
+                       (∃ #j. (!KU( xnT ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.12)) )
+                  case case_1
+                  by contradiction /* impossible chain */
+                next
+                  case case_2
+                  by contradiction /* cyclic */
+                qed
+              next
+                case c_senc
+                by contradiction /* from formulas */
+              qed
+            next
+              case R_out2_case_1
+              solve( (∃ #j.
+                       (SourceOutT1( senc(<~nR.2, xnT>, ~k.1) ) @ #j)
+                      ∧
+                       (¬(last(#j))) ∧ (#j < #vr.12))  ∥
+                     (∃ #j. (!KU( xnT ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.12)) )
+                case case_1
+                by solve( (#vr.11, 0) ~~> (#j, 0) )
+              next
+                case case_2
+                by contradiction /* cyclic */
+              qed
+            next
+              case R_out2_case_2
+              by contradiction /* cyclic */
+            qed
+          qed
+        next
+          case R_out2_case_2
+          solve( (∃ #j.
+                   (SourceOutT1( senc(<~nR.1, xnT>, ~k.1) ) @ #j)
+                  ∧
+                   (¬(last(#j))) ∧ (#j < #vr.7))  ∥
+                 (∃ #j. (!KU( xnT ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.7)) )
+            case case_1
+            by contradiction /* impossible chain */
+          next
+            case case_2
+            by contradiction /* cyclic */
+          qed
+        next
+          case T_out1
+          by contradiction /* from formulas */
+        next
+          case c_senc
+          by contradiction /* from formulas */
+        qed
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  next
+    case case_3
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma WA_Reader [use_induction]:
+  all-traces
+  "∀ sidR #i5.
+    (TestR( sidR ) @ #i5) ⇒
+    (∃ sidT kT nT m1 m2 #i1 #i2 #i3 #i4.
+      (((((((InR1( sidR, m1, m2 ) @ #i4) ∧
+            (OutT1( sidT, kT, nT, m1, m2 ) @ #i3)) ∧
+           (InT1( sidT, kT, m1 ) @ #i2)) ∧
+          (OutR1( sidR, m1 ) @ #i1)) ∧
+         (#i1 < #i2)) ∧
+        (#i2 < #i3)) ∧
+       (#i3 < #i4)) ∧
+      (#i4 < #i5))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidR #i5.
+  (TestR( sidR ) @ #i5)
+ ∧
+  ∀ sidT kT nT m1 m2 #i1 #i2 #i3 #i4.
+   (InR1( sidR, m1, m2 ) @ #i4) ∧
+   (OutT1( sidT, kT, nT, m1, m2 ) @ #i3) ∧
+   (InT1( sidT, kT, m1 ) @ #i2) ∧
+   (OutR1( sidR, m1 ) @ #i1)
+  ⇒
+   ((¬(#i1 < #i2)) ∨
+    (¬(#i2 < #i3)) ∨
+    (¬(#i3 < #i4)) ∨
+    (¬(#i4 < #i5)))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i5))  ∥
+         (∃ sidT kT nT m1 m2 #i1 #i2 #i3 #i4.
+           (InR1( ~sidR, m1, m2 ) @ #i4) ∧
+           (OutT1( sidT, kT, nT, m1, m2 ) @ #i3) ∧
+           (InT1( sidT, kT, m1 ) @ #i2) ∧
+           (OutR1( ~sidR, m1 ) @ #i1)
+          ∧
+           (¬(last(#i4))) ∧
+           (¬(last(#i3))) ∧
+           (¬(last(#i2))) ∧
+           (¬(last(#i1))) ∧
+           (#i1 < #i2) ∧
+           (#i2 < #i3) ∧
+           (#i3 < #i4) ∧
+           (#i4 < #i5)) )
+    case case_1
+    solve( !DB( kR ) ▶₀ #i5 )
+      case InitTagId
+      solve( Reader2( ~sidR, m1, senc(<m1, xnT>, ~k) ) ▶₁ #i5 )
+        case R_in1
+        solve( !KU( senc(<~nR, xnT>, ~k) ) @ #vk )
+          case R_out2
+          solve( Reader( ~sidR.1 ) ▶₀ #i1 )
+            case InitReader
+            solve( Tag( ~sidT, kT ) ▶₀ #i2 )
+              case InitTagSession
+              solve( Tag1( ~sidT, ~kT, ~nR ) ▶₀ #i3 )
+                case T_in1
+                by solve( Reader1( ~sidR, ~nR ) ▶₀ #i4 )
+              qed
+            qed
+          qed
+        next
+          case T_out1
+          solve( !KU( ~nR ) @ #vk.1 )
+            case R_out1
+            by contradiction /* cyclic */
+          next
+            case R_out2
+            by contradiction /* cyclic */
+          qed
+        next
+          case c_senc
+          by solve( !KU( ~k ) @ #vk.2 )
+        qed
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma WA_Tag [use_induction]:
+  all-traces
+  "∀ sidT #i7.
+    (TestT( sidT ) @ #i7) ⇒
+    (∃ sidR kT nT m1 m2 m3 #i1 #i2 #i3 #i4 #i5 #i6.
+      ((((((((((((InT2( sidT, kT, nT, m1, m2, m3 ) @ #i6) ∧
+                 (OutR2( sidR, m1, m2, m3 ) @ #i5)) ∧
+                (InR1( sidR, m1, m2 ) @ #i4)) ∧
+               (OutT1( sidT, kT, nT, m1, m2 ) @ #i3)) ∧
+              (InT1( sidT, kT, m1 ) @ #i2)) ∧
+             (OutR1( sidR, m1 ) @ #i1)) ∧
+            (#i1 < #i2)) ∧
+           (#i2 < #i3)) ∧
+          (#i3 < #i4)) ∧
+         (#i4 < #i5)) ∧
+        (#i4 < #i5)) ∧
+       (#i5 < #i6)) ∧
+      (#i6 < #i7))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidT #i7.
+  (TestT( sidT ) @ #i7)
+ ∧
+  ∀ sidR kT nT m1 m2 m3 #i1 #i2 #i3 #i4 #i5 #i6.
+   (InT2( sidT, kT, nT, m1, m2, m3 ) @ #i6) ∧
+   (OutR2( sidR, m1, m2, m3 ) @ #i5) ∧
+   (InR1( sidR, m1, m2 ) @ #i4) ∧
+   (OutT1( sidT, kT, nT, m1, m2 ) @ #i3) ∧
+   (InT1( sidT, kT, m1 ) @ #i2) ∧
+   (OutR1( sidR, m1 ) @ #i1)
+  ⇒
+   ((¬(#i1 < #i2)) ∨
+    (¬(#i2 < #i3)) ∨
+    (¬(#i3 < #i4)) ∨
+    (¬(#i4 < #i5)) ∨
+    (¬(#i5 < #i6)) ∨
+    (¬(#i6 < #i7)))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i7))  ∥
+         (∃ sidR kT nT m1 m2 m3 #i1 #i2 #i3 #i4 #i5 #i6.
+           (InT2( ~sidT, kT, nT, m1, m2, m3 ) @ #i6) ∧
+           (OutR2( sidR, m1, m2, m3 ) @ #i5) ∧
+           (InR1( sidR, m1, m2 ) @ #i4) ∧
+           (OutT1( ~sidT, kT, nT, m1, m2 ) @ #i3) ∧
+           (InT1( ~sidT, kT, m1 ) @ #i2) ∧
+           (OutR1( sidR, m1 ) @ #i1)
+          ∧
+           (¬(last(#i6))) ∧
+           (¬(last(#i5))) ∧
+           (¬(last(#i4))) ∧
+           (¬(last(#i3))) ∧
+           (¬(last(#i2))) ∧
+           (¬(last(#i1))) ∧
+           (#i1 < #i2) ∧
+           (#i2 < #i3) ∧
+           (#i3 < #i4) ∧
+           (#i4 < #i5) ∧
+           (#i5 < #i6) ∧
+           (#i6 < #i7)) )
+    case case_1
+    solve( Tag3( ~sidT, kT, ~nT, x1, m2, senc(<~nT, x1>, kT) ) ▶₀ #i7 )
+      case T_in2
+      solve( !KU( senc(<~nT, x1>, ~kT) ) @ #vk )
+        case R_out2
+        solve( (¬(#vr.8 < #vr.2))  ∥ (¬(#vr.1 < #vr.7)) )
+          case case_1
+          solve( !KU( ~nR ) @ #vk.1 )
+            case R_out1
+            by contradiction /* cyclic */
+          next
+            case R_out2
+            by contradiction /* cyclic */
+          qed
+        next
+          case case_2
+          solve( !KU( senc(<~nR, ~nT>, ~kT) ) @ #vk.2 )
+            case T_out1
+            by contradiction /* cyclic */
+          next
+            case c_senc
+            by solve( !KU( ~kT ) @ #vk.4 )
+          qed
+        qed
+      next
+        case T_out1
+        solve( (¬(#vr.1 < #vr.5))  ∥ (¬(#vr.5 < #vr.1))  ∥
+               (~sidT = ~sidT.1) )
+          case case_1
+          solve( (¬(#vr.1 < #vr.5))  ∥ (¬(#vr.5 < #vr.2))  ∥
+                 (~sidT = ~sidT.1) )
+            case case_1
+            solve( (¬(#vr.1 < #vr.6))  ∥ (¬(#vr.6 < #vr.1))  ∥
+                   (~sidT = ~sidT.1) )
+              case case_1
+              solve( (¬(#vr.2 < #vr.5))  ∥ (¬(#vr.5 < #vr.1))  ∥
+                     (~sidT = ~sidT.1) )
+                case case_1
+                solve( !KU( ~nT ) @ #vk.2 )
+                  case T_out1
+                  by contradiction /* cyclic */
+                qed
+              next
+                case case_2
+                solve( (¬(#vr.2 < #vr.5))  ∥ (¬(#vr.5 < #vr.2))  ∥
+                       (~sidT = ~sidT.1) )
+                  case case_1
+                  by contradiction /* from formulas */
+                next
+                  case case_2
+                  solve( !KU( ~nT ) @ #vk.1 )
+                    case T_out1
+                    by contradiction /* cyclic */
+                  qed
+                next
+                  case case_3
+                  solve( !KU( ~nT ) @ #vk.1 )
+                    case T_out1
+                    by contradiction /* cyclic */
+                  qed
+                qed
+              next
+                case case_3
+                solve( !KU( ~nT ) @ #vk.1 )
+                  case T_out1
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_2
+              by contradiction /* cyclic */
+            next
+              case case_3
+              solve( !KU( ~nT ) @ #vk.1 )
+                case T_out1
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2
+            solve( !KU( ~nT ) @ #vk.1 )
+              case T_out1
+              by contradiction /* cyclic */
+            qed
+          next
+            case case_3
+            solve( !KU( ~nT ) @ #vk.1 )
+              case T_out1
+              by contradiction /* cyclic */
+            qed
+          qed
+        next
+          case case_2
+          solve( (¬(#vr.1 < #vr.5))  ∥ (¬(#vr.5 < #vr.2))  ∥
+                 (~sidT = ~sidT.1) )
+            case case_1
+            solve( (¬(#vr.1 < #vr.6))  ∥ (¬(#vr.6 < #vr.1))  ∥
+                   (~sidT = ~sidT.1) )
+              case case_1
+              solve( (¬(#vr.2 < #vr.5))  ∥ (¬(#vr.5 < #vr.1))  ∥
+                     (~sidT = ~sidT.1) )
+                case case_1
+                by contradiction /* from formulas */
+              next
+                case case_2
+                solve( (¬(#vr.2 < #vr.5))  ∥ (¬(#vr.5 < #vr.2))  ∥
+                       (~sidT = ~sidT.1) )
+                  case case_1
+                  by contradiction /* from formulas */
+                next
+                  case case_2
+                  solve( !KU( ~nT ) @ #vk.1 )
+                    case T_out1
+                    by contradiction /* cyclic */
+                  qed
+                next
+                  case case_3
+                  solve( !KU( ~nT ) @ #vk.1 )
+                    case T_out1
+                    by contradiction /* cyclic */
+                  qed
+                qed
+              next
+                case case_3
+                solve( !KU( ~nT ) @ #vk.1 )
+                  case T_out1
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_2
+              by contradiction /* cyclic */
+            next
+              case case_3
+              solve( !KU( ~nT ) @ #vk.1 )
+                case T_out1
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2
+            solve( !KU( ~nT ) @ #vk.1 )
+              case T_out1
+              by contradiction /* cyclic */
+            qed
+          next
+            case case_3
+            solve( !KU( ~nT ) @ #vk.1 )
+              case T_out1
+              by contradiction /* cyclic */
+            qed
+          qed
+        next
+          case case_3
+          solve( !KU( ~nT ) @ #vk.1 )
+            case T_out1
+            by contradiction /* cyclic */
+          qed
+        qed
+      next
+        case c_senc
+        by solve( !KU( ~kT ) @ #vk.3 )
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma ND_Reader [use_induction]:
+  all-traces
+  "∀ sidR sidT kT nT m1 m2 #i1 #i2 #i3 #i4.
+    (((((((InR1( sidR, m1, m2 ) @ #i4) ∧
+          (OutT1( sidT, kT, nT, m1, m2 ) @ #i3)) ∧
+         (InT1( sidT, kT, m1 ) @ #i2)) ∧
+        (OutR1( sidR, m1 ) @ #i1)) ∧
+       (#i1 < #i2)) ∧
+      (#i2 < #i3)) ∧
+     (#i3 < #i4)) ⇒
+    (∃ kR xnT #i0.
+      ((m2 = senc(<m1, xnT>, kR)) ∧ (InsertDB( kR ) @ #i0)) ∧
+      (#i0 < #i4))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidR sidT kT nT m1 m2 #i1 #i2 #i3 #i4.
+  (InR1( sidR, m1, m2 ) @ #i4) ∧
+  (OutT1( sidT, kT, nT, m1, m2 ) @ #i3) ∧
+  (InT1( sidT, kT, m1 ) @ #i2) ∧
+  (OutR1( sidR, m1 ) @ #i1)
+ ∧
+  (#i1 < #i2) ∧
+  (#i2 < #i3) ∧
+  (#i3 < #i4) ∧
+  (∀ kR xnT #i0.
+    (m2 = senc(<m1, xnT>, kR)) ∧ (InsertDB( kR ) @ #i0)
+   ⇒
+    ¬(#i0 < #i4))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i4))  ∥
+         (∃ kR xnT #i0.
+           (senc(<~nR, ~nT>, kT) = senc(<~nR, xnT>, kR)) ∧
+           (InsertDB( kR ) @ #i0)
+          ∧
+           (¬(last(#i0))) ∧ (#i0 < #i4)) )
+    case case_1
+    solve( Reader( ~sidR ) ▶₀ #i1 )
+      case InitReader
+      solve( Tag( ~sidT, kT ) ▶₀ #i2 )
+        case InitTagSession
+        by contradiction /* from formulas */
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma ND_Tag [use_induction]:
+  all-traces
+  "∀ sidR sidT kT nT m1 m2 m3 #i1 #i2 #i3 #i4 #i5 #i6.
+    ((((((((((((InT2( sidT, kT, nT, m1, m2, m3 ) @ #i6) ∧
+               (OutR2( sidR, m1, m2, m3 ) @ #i5)) ∧
+              (InR1( sidR, m1, m2 ) @ #i4)) ∧
+             (OutT1( sidT, kT, nT, m1, m2 ) @ #i3)) ∧
+            (InT1( sidT, kT, m1 ) @ #i2)) ∧
+           (OutR1( sidR, m1 ) @ #i1)) ∧
+          (#i1 < #i2)) ∧
+         (#i2 < #i3)) ∧
+        (#i3 < #i4)) ∧
+       (#i4 < #i5)) ∧
+      (#i4 < #i5)) ∧
+     (#i5 < #i6)) ⇒
+    (m3 = senc(<nT, m1>, kT))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sidR sidT kT nT m1 m2 m3 #i1 #i2 #i3 #i4 #i5 #i6.
+  (InT2( sidT, kT, nT, m1, m2, m3 ) @ #i6) ∧
+  (OutR2( sidR, m1, m2, m3 ) @ #i5) ∧
+  (InR1( sidR, m1, m2 ) @ #i4) ∧
+  (OutT1( sidT, kT, nT, m1, m2 ) @ #i3) ∧
+  (InT1( sidT, kT, m1 ) @ #i2) ∧
+  (OutR1( sidR, m1 ) @ #i1)
+ ∧
+  (#i1 < #i2) ∧
+  (#i2 < #i3) ∧
+  (#i3 < #i4) ∧
+  (#i4 < #i5) ∧
+  (#i5 < #i6) ∧
+  (¬(m3 = senc(<nT, m1>, kT)))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (last(#i6))  ∥
+         (senc(<xnT, ~nR>, kR) = senc(<~nT, ~nR>, kT)) )
+    case case_1
+    solve( Reader( ~sidR ) ▶₀ #i1 )
+      case InitReader
+      solve( Tag( ~sidT, kT ) ▶₀ #i2 )
+        case InitTagSession
+        solve( Tag1( ~sidT, ~kT, ~nR ) ▶₀ #i3 )
+          case T_in1
+          solve( Reader1( ~sidR, ~nR ) ▶₀ #i4 )
+            case R_out1
+            solve( Reader3( ~sidR, ~nR, senc(<~nR, ~nT>, ~kT), xnT, kR
+                   ) ▶₀ #i5 )
+              case R_test
+              by contradiction /* from formulas */
+            qed
+          qed
+        qed
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  qed
+qed
+
+/* All well-formedness checks were successful. */
+
+end

@@ -1,0 +1,82 @@
+/*************************************
+OSK (v2)
+
+[1] M. Ohkubo, K. Suzuki, and S. Kinoshita,
+‘Cryptographic Approach to “Privacy-Friendly” Tags’,
+p. 17.
+
+DESCRIPTION OF THE PROTOCOL
+[init.]   kT <-- k, insert k in DB
+[session] T --> R : g(kT)   kT <-- h(kT)
+          R --> T : OK      if there exists n >= 0 and kR in DB
+                              such that x=g(h^n(kR))
+
+PROOFS
+- frame opacity
+  * Observational_equivalence => true (automatic mode)
+
+COMMENTS
+- this model is over-simplified: to check FO for the OSK protocol, we only want
+to check that all messages are different and indistinguishable from nonces
+  * we do not model the reader nor the database since we over-approximate the
+  reader by deleting the tests
+  * we abstract the multiset of '1' in the tag's state by any value given by the
+  attacker (we thus consider a bigger set of traces, but the original honest
+  traces are included in this set, since '1' are public values)
+*************************************/
+
+theory OSK_v2_FO_simplified
+begin
+
+builtins: multiset
+functions: h/2, g/1
+
+/*************************************
+PROTOCOL
+*************************************/
+
+rule InitTagId:
+  [ Fr(~k0) ]
+  --[ Init(~k0) ]->
+  [ !Tag(~k0) ]
+
+rule T_out:
+  let m = diff(g(h(kT0,kTPower)),~nIdeal) in
+  [ !Tag(kT0), In(kTPower), Fr(~nIdeal) ]
+  --[ OutT(kT0,kTPower) ]->
+  [ Out(m) ]
+
+/* ATTACKER */
+// we use here a slightly different model for the attacker than the one used
+// for the WA and ND conditions in order to be able to conclude the proof of FO
+// with Tamarin: we give more capacities to the attacker but it stays sound to
+// check frame opacity on a set of traces over-approximating the protocol
+ rule A_applyh_up:
+   [ In(h(k0,x)), In(y) ]
+   --[ Applyh(k0,x) ]->
+   [ Out(h(k0,x+y)) ]
+// the following rule is necessary because of the restriction applyh
+ rule A_applyh_down:
+   [ In(h(k0,x+y)), In(y) ]
+   --[ Applyh(k0,x+y) ]->
+   [ Out(h(k0,x)) ]
+
+
+/*************************************
+RESTRICTIONS
+*************************************/
+
+// outputs are all different
+restriction outTag:
+  "not (Ex kT0 kTPower #i1 #i2.
+    OutT(kT0,kTPower)@i1 &
+    OutT(kT0,kTPower)@i2 &
+    not(#i1 = #i2)
+  )"
+
+// this restriction does not restrict the attacker to compute any h^n(k0)
+// thanks to the rules A_applyh_up and A_applyh_down
+restriction applyh:
+  "not(Ex k0 x y #i #j. Applyh(k0,x)@i & Applyh(k0,y)@j & not(x=y))"
+
+end

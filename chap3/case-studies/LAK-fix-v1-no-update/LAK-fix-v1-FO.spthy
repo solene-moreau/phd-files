@@ -1,0 +1,138 @@
+/*************************************
+LAK (FIX v1)
+
+[1] T. van Deursen and S. Radomirović,
+‘Attacks on RFID Protocols’,
+Cryptology ePrint Archive, vol. 2008, no. 310, pp. 1–56, Aug. 2009.
+
+DESCRIPTION OF THE PROTOCOL
+[init.]   kT <-- k, insert k in DB
+[session] R --> T : nR
+          T --> R : <nT,h(<xnR,nT,kT>)>
+          R --> T : h(<h(<nR,xnT,kR>),kR,nR>)   if there exists kR in DB
+                                                    such that snd(x) = h(<nR,fst(x),kR>)
+          T --> R : ok                          if x = h(<h(<xnR,nT,kT>),kT,xnR>)
+          T --> R : error                       otherwise
+
+PROOFS
+- sanity checks
+  * readerComplete            => true (automatic mode)
+  * tagComplete               => true (automatic mode)
+- helpful lemmas
+  * initDB                    => true (automatic mode)
+  * secrecyDB1                => true (automatic mode)
+  * secrecyDB2                => true (automatic mode)
+  * secrecyIdentityTag        => true (automatic mode)
+- frame opacity
+  * Observational_equivalence => true (automatic mode)
+*************************************/
+
+theory LAK_fix_v1_FO
+begin
+
+functions: h/3, OK/0, ERROR/0
+
+/*************************************
+PROTOCOL
+*************************************/
+
+rule InitReader:
+  [ Fr(~sidR) ]
+  --[ NewReaderSession(~sidR) ]->
+  [ Reader(~sidR) ]
+
+rule InitTagId:
+  [ Fr(~k) ]
+  --[ NewTagState(~k), InsertDB(~k) ]->
+  [ !DB(~k), !TagSession(~k) ]
+
+rule InitTagSession:
+  [ !TagSession(~kT), Fr(~sidT) ]
+  --[ NewTagSession(~sidT,~kT) ]->
+  [ Tag(~sidT,~kT) ]
+
+/* READER */
+
+rule R_out1:
+  let m1 = ~nR in
+  [ Reader(~sidR), Fr(~nR)]
+  --[ OutR1(~sidR,~nR) ]->
+  [ Reader1(~sidR,~nR), Out(m1) ]
+
+rule R_in1:
+  [ Reader1(~sidR,m1), In(x2) ]
+  --[ InR1(~sidR,m1,x2) ]->
+  [ Reader2(~sidR,m1,x2) ]
+
+rule R_test:
+  // let x2 = <xnT,h(m1,xnT,kR)> in
+  let x2 = <xnT,xh> in // the tag's output is a pair of nonces in the idealised frame
+  [ !DB(kR), Reader2(~sidR,m1,x2) ]
+  --[ LookupDB(kR), TestR(~sidR) ]->
+  [ Reader3(~sidR,m1,x2,xnT,kR) ]
+
+rule R_out2:
+  let m3 = diff(h(h(m1,xnT,kR),kR,m1),~nIdeal) in
+  [ Reader3(~sidR,m1,x2,xnT,kR), Fr(~nIdeal) ]
+  --[ OutR2(~sidR,m1,x2,m3), CompleteR(~sidR) ]->
+  [ Out(m3) ]
+
+/* TAG */
+
+rule T_in1:
+  [ Tag(~sidT,kT), In(x1) ]
+  --[ PlayT(~sidT,kT), InT1(~sidT,kT,x1) ]->
+  [ Tag1(~sidT,kT,x1) ]
+
+rule T_out1:
+  let m2 = diff(<~nT,h(x1,~nT,kT)>,<~nIdeal1,~nIdeal2>) in
+  [ Tag1(~sidT,kT,x1), Fr(~nT), Fr(~nIdeal1), Fr(~nIdeal2) ]
+  --[ PlayT(~sidT,kT), OutT1(~sidT,kT,~nT,x1,m2) ]->
+  [ Tag2(~sidT,kT,~nT,x1,m2), Out(m2) ]
+
+rule T_in2:
+  [ Tag2(~sidT,kT,~nT,x1,m2), In(x3) ]
+  --[ PlayT(~sidT,kT), InT2(~sidT,kT,~nT,x1,m2,x3) ]->
+  [ Tag3(~sidT,kT,~nT,x1,m2,x3) ]
+
+rule T_test:
+  // let x3 = h(h(x1,~nT,kT),kT,x1) in
+  [ Tag3(~sidT,kT,~nT,x1,m2,x3) ]
+  --[ PlayT(~sidT,kT), TestT(~sidT), CompleteT(~sidT) ]->
+  [ Out(OK) ]
+
+rule T_test_else:
+  [ Tag3(~sidT,kT,~nT,x1,m2,x3) ]
+  --[ PlayT(~sidT,kT), ElseT(~sidT) ]-> // NotEqual(x3,h(h(x1,~nT,kT),kT,x1))
+  [ Out(ERROR) ]
+
+/*************************************
+RESTRICTIONS
+*************************************/
+
+// restriction notEqual:
+//   "All x y #i. NotEqual(x,y)@i ==> not(x=y)"
+//
+// // no interleaving sessions for a given tag
+// restriction seqSessionTag:
+//   "not (Ex sidT1 sidT2 kT #i1 #i2 #i3.
+//     PlayT(sidT1,kT) @ i1 &
+//     PlayT(sidT2,kT) @ i2 &
+//     PlayT(sidT1,kT) @ i3 &
+//     i1 < i2 & i2 < i3 &
+//     not(sidT1=sidT2)
+//   )"
+
+/*************************************
+SANITY CHECKS
+*************************************/
+
+lemma readerComplete:
+  exists-trace
+    "Ex sidR #i. CompleteR(sidR)@i"
+
+lemma tagComplete:
+  exists-trace
+    "Ex sidT #i. CompleteT(sidT)@i"
+
+end

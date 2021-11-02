@@ -1,0 +1,169 @@
+/*************************************
+LAK (FIX v2)
+
+[1] T. van Deursen and S. Radomirović,
+‘Attacks on RFID Protocols’,
+Cryptology ePrint Archive, vol. 2008, no. 310, pp. 1–56, Aug. 2009.
+
+DESCRIPTION OF THE PROTOCOL
+[init.]   kT <-- k, insert (k,0) in DB
+[session] R --> T : nR
+          T --> R : <nT,h(<xnR,nT,kT>)>
+          R --> T : h(<h(<nR,xnT,hkey(k0,n)>),hkey(k0,n),nR>)   if there exists (k0,n) in DB
+                                                                  such that snd(x) = h(<nR,fst(x),hkey(k0,n)>)
+                                                                (k0,n) <-- (k0,n+1)
+          R --> T : h(<h(<nR,xnT,hkey(k0,p)>),hkey(k0,p),nR>)   if there exists (k0,n) in DB, p<=n
+                                                                  such that snd(x) = h(<nR,fst(x),hkey(k0,p)>)
+          T --> R : ok                                          if x = h(<h(<xnR,nT,kT>),kT,xnR>)
+                                                                kT <-- h(kT)
+          T --> R : error                                       otherwise
+
+PROOFS
+- sanity checks
+  * readerComplete            => true (automatic mode)
+  * tagComplete               => true (automatic mode)
+- frame opacity
+  * Observational_equivalence => true (automatic mode)
+*************************************/
+
+theory LAK_fix_v2_FO_simplified
+begin
+
+builtins: multiset
+functions:
+  h/3, hkey/2,
+  OK/0, ERROR/0
+
+/*************************************
+PROTOCOL
+*************************************/
+
+rule InitReader:
+  [ Fr(~sidR) ]
+  --[ NewReaderSession(~sidR) ]->
+  [ Reader(~sidR) ]
+
+rule InitTagId:
+  [ Fr(~k) ]
+  --[ NewTag(~k) ]->
+  [ !TagInit(~k) ]
+
+rule InitTagbis:
+  [ !TagInit(~k), In(z) ]
+  --[ NewTagState(~k,hkey(~k,z)), StateDB(hkey(~k,z)) ]->
+  [ !DB(hkey(~k,z)), !TagSession(~k,hkey(~k,z)) ]
+
+rule InitTagSession:
+  [ !TagSession(idT,kT), Fr(~sidT) ]
+  --[ NewTagSession(~sidT,idT,kT), StateT(kT) ]->
+  [ Tag(~sidT,idT,kT) ]
+
+/* READER */
+
+rule R_out1:
+  let m1 = ~nR in
+  [ Reader(~sidR),  Fr(~nR)]
+  --[ OutR1(~sidR,m1) ]->
+  [ Reader1(~sidR,m1), Out(m1) ]
+
+rule R_in1:
+  [ Reader1(~sidR,m1), In(x2) ]
+  --[ InR1(~sidR,m1,x2) ]->
+  [ Reader2(~sidR,m1,x2) ]
+
+rule R_test:
+  let x2 = <xnT,xh> in
+  [ !DB(kR), Reader2(~sidR,m1,x2) ]
+  --[ TestR(~sidR) ]->
+  [ Reader3(~sidR,kR,m1,x2,xnT,xh) ]
+
+rule R_out2:
+  let m3 = diff(h(xh,kR,m1),~nIdeal) in
+  [ Reader3(~sidR,kR,m1,x2,xnT,xh), Fr(~nIdeal) ]
+  --[ OutR2(~sidR,m1,x2,m3), CompleteR(~sidR,kR) ]->
+  [ Out(m3) ]
+
+/* TAG */
+
+rule T_in1:
+  [ Tag(~sidT,idT,kT), In(x1) ]
+  --[ PlayT(~sidT,idT,kT), InT1(~sidT,kT,x1) ]->
+  [ Tag1(~sidT,idT,kT,x1) ]
+
+rule T_out1:
+  let m2 = diff(<~nT,h(x1,~nT,kT)>,<~nIdeal1,~nIdeal2>) in
+  [ Tag1(~sidT,idT,kT,x1), Fr(~nT), Fr(~nIdeal1), Fr(~nIdeal2) ]
+  --[ PlayT(~sidT,idT,kT), OutT1(~sidT,kT,~nT,x1,m2), CompleteT(~sidT,kT) ]->
+  [ Tag2(~sidT,idT,kT,~nT,x1,m2), Out(m2) ]
+
+// rule T_in2:
+//   [ Tag2(sidT,idT,kT,nT,x1,m2), In(x3) ]
+//   --[ PlayT(sidT,idT,kT), InT2(sidT,kT,nT,x1,m2,x3) ]->
+//   [ Tag3(sidT,idT,kT,nT,x1,m2,x3) ]
+//
+// rule T_test_then:
+//   // let x3 = h(h(x1,nT,hkey(k,kPower)),hkey(k,kPower),x1) in
+//   [ Tag3(sidT,idT,hkey(k,kPower),nT,x1,m2,x3) ]
+//   --[ PlayT(sidT,idT,hkey(k,kPower)), TestT(sidT), CompleteT(sidT,hkey(k,kPower)), NewTagState(idT,hkey(k,kPower+'1')) ]->
+//   [ !TagSession(idT,hkey(k,kPower+'1')), Out(OK) ]
+//
+// rule T_test_else:
+//   [ Tag3(sidT,idT,kT,nT,x1,m2,x3) ]
+//   --[ PlayT(sidT,idT,kT), ElseT(sidT) ]-> // NotEqual(x3,h(h(x1,~nT,kT),kT,x1))
+//   [ Out(ERROR) ]
+
+/* ATTACKER */
+// we use here a slightly different model for the attacker than the one used
+// for the WA and ND conditions in order to be able to conclude the proof of FO
+// with Tamarin: we give more capacities to the attacker but it stays sound to
+// check frame opacity on a set of traces over-approximating the protocol
+rule A_applyhkey_up:
+  [ In(hkey(k0,x)), In(y) ]
+  --[ Applyhkey(k0,x) ]->
+  [ Out(hkey(k0,x+y)) ]
+// the following rule is necessary because of the restriction applyh
+rule A_applyhkey_down:
+  [ In(hkey(k0,x+y)), In(y) ]
+  --[ Applyhkey(k0,x+y) ]->
+  [ Out(hkey(k0,x)) ]
+
+/*************************************
+RESTRICTIONS
+*************************************/
+
+// // no interleaving sessions for a given tag
+// restriction seqSessionTag:
+//   "not (Ex sidT1 sidT2 idT kT1 kT2 kT3 #i1 #i2 #i3.
+//     PlayT(sidT1,idT,kT1)@i1 &
+//     PlayT(sidT2,idT,kT2)@i2 &
+//     PlayT(sidT1,idT,kT3)@i3 &
+//     i1<i2 & i2<i3 &
+//     not(sidT1=sidT2)
+//   )"
+//
+// // once the tag has updated its state, no session with a previous state
+// restriction updateTag:
+//   "not (Ex sidT idT k kPower z #i1 #i2.
+//     NewTagState(idT,hkey(k,kPower+z)) @ i1 &
+//     PlayT(sidT,idT,hkey(k,kPower)) @ i2 &
+//     i1 < i2
+//   )"
+
+// this restriction does not restrict the attacker to compute any hkey^n(k0)
+// thanks to the rules A_applyhkey_up and A_applyhkey_down
+restriction applyhkey:
+  "not(Ex k0 x y #i #j. Applyhkey(k0,x)@i & Applyhkey(k0,y)@j & not(x=y))"
+
+/*************************************
+SANITY CHECKS
+*************************************/
+
+lemma readerComplete:
+  exists-trace
+    "Ex sidR k #i. CompleteR(sidR,hkey(k,'1'))@i"
+
+lemma tagComplete:
+  exists-trace
+    "Ex sidT k #i. CompleteT(sidT,hkey(k,'1'))@i"
+
+end
