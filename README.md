@@ -1,4 +1,4 @@
-This folder contains the files corresponding to the case studies presented in my PhD manuscript.
+This folder contains the files corresponding to the case studies presented in this [manuscript](https://people.irisa.fr/Solene.Moreau/thesis-manuscript-smoreau.pdf).
 
 The subfolder *chap3* contains the Tamarin files for the case studies presented in Chapter 3 and some additional material corresponding to:
 * encodings of unlinkability using diff-equivalence for the Basic Hash protocol;
